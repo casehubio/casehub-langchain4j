@@ -39,20 +39,24 @@ interaction. Merkle Mountain Range inclusion proofs. Ed25519 checkpoint
 signing. The developer adds one dependency. Their existing ChatModel —
 Ollama, OpenAI, Anthropic, whatever — gains compliance-grade evidence.
 
-### "Customer A can see Customer B's chat history."
+### "Customer A's documents appeared in Customer B's search results."
 
-LC4j's `ChatMemoryStore` takes a `memoryId` and returns messages. There
-is no concept of a tenant. In a multi-tenant SaaS deployment, a bug in
-memoryId construction (or a malicious prompt injection that manipulates
-the ID) means one customer's conversation history leaks to another. The
-developer must build tenant isolation manually on every store operation.
+LC4j's `EmbeddingStore.search()` returns the nearest vectors — with no
+awareness of which tenant owns them. `ContentRetriever.retrieve()` has no
+tenant filter. In a multi-tenant SaaS deployment, embedding and retrieval
+operations must be scoped per tenant. This is not trivial for vector
+stores — it requires metadata filtering on every search, tenant-tagged
+ingestion on every add, and consistent scoping across the RAG pipeline.
+`ChatMemoryStore` is simpler (prefix the memoryId), but embedding stores
+and content retrievers are where cross-tenant leakage actually happens.
 
-**casehub-langchain4j-tenancy** wraps any `ChatMemoryStore`,
-`EmbeddingStore`, or `ContentRetriever` with a decorator that scopes
+**casehub-langchain4j-tenancy** wraps any `EmbeddingStore`,
+`ContentRetriever`, or `ChatMemoryStore` with a decorator that scopes
 every operation to `CurrentPrincipal.tenancyId()`. The developer's
-existing Redis, PostgreSQL, or Qdrant store is preserved inside the
+existing Qdrant, PostgreSQL, or Redis store is preserved inside the
 decorator. Cross-tenant access is structurally impossible through the
-wrapped interface.
+wrapped interface. Lightweight — depends only on `casehub-platform-api`
+(a zero-dep Java SPI module).
 
 ### "The agent approved a €2M transaction without human review."
 
@@ -91,12 +95,14 @@ reputation. Two agents that happen to have the same prompt are
 indistinguishable.
 
 **casehub-langchain4j-eidos** gives agents structured identity:
-personality from 48 archetypes (Hartwell & Chen), weighted disposition
-axes, goal narratives, epistemic domains, and capability declarations
-with health probing. The system prompt is rendered dynamically from this
-identity — per invocation, per context. An agent's reputation evolves
-from outcomes across sessions. This is not prompt engineering — it is
-agent architecture.
+dynamic system prompt rendering from semantic context (role, capability,
+goals, constraints), capability declarations with health probing
+(agents report whether their skills are currently operable), and
+subsumption-based capability matching (select agents by what they can
+actually do, not by name). An agent's reputation evolves from outcomes
+across sessions. Personality composition (disposition axes, archetype
+profiles) is available for applications that need differentiated agent
+behaviour. This is not prompt engineering — it is agent architecture.
 
 ### "Our agents communicate via method calls. We can't audit what they said."
 
@@ -119,12 +125,19 @@ LC4j has no resilience layer. A failed tool call or a model timeout is
 a hard stop. A hung agent blocks forever. There is no retry, no dead
 letter queue, no circuit breaker, no cost budget.
 
-**casehub-langchain4j-resilience** adds `DeadLetterQueue`,
-`RetryPolicy`, `PoisonPillDetector`, and `WatchdogRecoveryBridge`. Failed
-agent invocations retry with backoff. Hung agents are detected and
-cancelled. Concurrent invocations are budget-limited for cost control.
-The developer adds one dependency. Their agent pipeline becomes
-production-hardened.
+Generic resilience libraries (Resilience4j, MicroProfile Fault
+Tolerance, Quarkus `@Retry`/`@Timeout`) handle method-level retry and
+timeout. They do not handle agent-specific concerns: detecting that an
+agent is stuck in a reasoning loop (not just slow), identifying poison
+inputs that will fail on every retry, or maintaining a dead letter queue
+of failed agent invocations for later inspection and replay.
+
+**casehub-langchain4j-resilience** adds agent-aware resilience:
+`PoisonPillDetector` identifies inputs that will always fail.
+`WatchdogRecoveryBridge` detects hung agents (not just slow responses —
+reasoning loops). `DeadLetterQueue` captures failed invocations for
+inspection. `DispatchBudget` limits concurrent invocations for cost
+control. These compose with generic resilience — they don't replace it.
 
 ## The Four Phases
 
@@ -246,6 +259,35 @@ customer requested it. This is a public commitment.
 
 **Both frameworks.** Every module ships with Quarkus CDI and Spring
 auto-configuration from day one.
+
+## Dependency Transparency
+
+Not all modules are equal in weight. The dependency footprint per module:
+
+| Module | Transitive CaseHub deps | Weight |
+|---|---|---|
+| audit | casehub-ledger-api, casehub-platform-api | Light — two API JARs |
+| tenancy | casehub-platform-api | Minimal — one API JAR |
+| resilience | casehub-engine-common-core | Light — engine utilities only |
+| governance | casehub-platform-agent-api, casehub-ledger-api, casehub-engine-api (optional) | Medium — oversight gates need engine |
+| eidos | casehub-eidos-api | Medium — identity model |
+| qhorus | casehub-qhorus-api | Medium — channel infrastructure |
+| work (human-in-the-loop) | casehub-work-api | Medium — WorkItem lifecycle |
+
+Phase 1 modules (audit, tenancy, resilience) are genuinely light — API
+JARs with no runtime infrastructure requirements. Phase 2 modules
+(eidos, qhorus, work) are heavier — they bring real capabilities that
+require real backing services. We are upfront about this because
+"add one dependency" should mean the developer knows what they're
+getting.
+
+Phase 4 (engine orchestration, blocks patterns) is a platform adoption
+decision, not a drop-in enrichment. We don't pretend otherwise. The path
+from Phase 1 to Phase 4 is gradual and each step is optional — but
+Phase 4 is choosing CaseHub as your orchestration layer, and we're
+honest about that.
+
+---
 
 ## Architecture
 
