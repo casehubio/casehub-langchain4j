@@ -100,9 +100,11 @@ goals, constraints), capability declarations with health probing
 (agents report whether their skills are currently operable), and
 subsumption-based capability matching (select agents by what they can
 actually do, not by name). An agent's reputation evolves from outcomes
-across sessions. Personality composition (disposition axes, archetype
-profiles) is available for applications that need differentiated agent
-behaviour. This is not prompt engineering — it is agent architecture.
+across sessions. Personality composition — weighted disposition axes
+and archetype profiles — is available for applications that need
+differentiated agent behaviour (proven in Wacky Manor with ~8
+distinguishable personalities in practice). This is not prompt
+engineering — it is agent architecture.
 
 ### "Our agents communicate via method calls. We can't audit what they said."
 
