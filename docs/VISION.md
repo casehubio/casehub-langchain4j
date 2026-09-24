@@ -1,0 +1,292 @@
+# casehub-langchain4j — Vision and Roadmap
+
+## What This Is
+
+LangChain4j is the standard Java library for building LLM-powered
+applications. It handles model providers, memory, RAG, tool calling, and
+agentic orchestration patterns. It does this well.
+
+What it doesn't handle — by design — is what happens when those
+applications need to operate in enterprise environments: cryptographic
+audit trails, multi-tenant data isolation, human oversight of agent
+decisions, agent identity and reputation, structured inter-agent
+communication, and compliance evidence.
+
+`casehub-langchain4j` adds these capabilities to LangChain4j
+applications. It wraps existing LangChain4j components with enterprise
+concerns — it does not replace them. A developer keeps their chosen
+providers, stores, and orchestration patterns. CaseHub enriches them.
+
+## Why a LangChain4j Developer Needs This
+
+These are real problems that surface when LC4j applications move from
+proof-of-concept to production deployment. Each one has blocked or
+delayed enterprise adoption.
+
+### "Our auditor asked for evidence that the AI made this decision."
+
+An LC4j application calls `chatModel.chat()` and gets a response. There
+is no record of what was sent, what was returned, which model version was
+used, or how much it cost — unless the developer builds logging
+themselves. Under EU AI Act Art.12, high-risk AI systems must maintain
+logs "to enable the tracing of the AI system's operations." OTel traces
+show that a call happened. They do not prove what the model received and
+returned, and they are not tamper-evident.
+
+**casehub-langchain4j-audit** adds a `ChatModelListener` that produces
+cryptographically signed `CaseLedgerEntry` records for every LLM
+interaction. Merkle Mountain Range inclusion proofs. Ed25519 checkpoint
+signing. The developer adds one dependency. Their existing ChatModel —
+Ollama, OpenAI, Anthropic, whatever — gains compliance-grade evidence.
+
+### "Customer A can see Customer B's chat history."
+
+LC4j's `ChatMemoryStore` takes a `memoryId` and returns messages. There
+is no concept of a tenant. In a multi-tenant SaaS deployment, a bug in
+memoryId construction (or a malicious prompt injection that manipulates
+the ID) means one customer's conversation history leaks to another. The
+developer must build tenant isolation manually on every store operation.
+
+**casehub-langchain4j-tenancy** wraps any `ChatMemoryStore`,
+`EmbeddingStore`, or `ContentRetriever` with a decorator that scopes
+every operation to `CurrentPrincipal.tenancyId()`. The developer's
+existing Redis, PostgreSQL, or Qdrant store is preserved inside the
+decorator. Cross-tenant access is structurally impossible through the
+wrapped interface.
+
+### "The agent approved a €2M transaction without human review."
+
+LC4j's `@SupervisorAgent` plans actions and executes them. There is no
+checkpoint between "the LLM decided to do this" and "it happened." In
+financial services, healthcare, and government, certain actions require
+human approval before execution. An agent that autonomously approves
+transactions, disables accounts, or prescribes medication is a liability.
+
+**casehub-langchain4j-governance** implements `AgentListener` to
+intercept agent invocations. Before a sensitive action executes, the
+governance layer checks an oversight gate. If approval is required:
+execution pauses, a `WorkItem` is created for the right approver group,
+and execution resumes only after a human says yes. The LC4j agent code
+does not change.
+
+### "We have 12 agents that can handle this task. Which one should we pick?"
+
+LC4j's supervisor mode picks the next agent by asking the LLM. There is
+no historical data about which agent performs well on which type of task.
+There is no feedback loop from outcomes to routing. Every invocation is
+a fresh guess.
+
+**casehub-langchain4j-governance** adds trust routing: Bayesian Beta
+trust scores evolve from attestation events and outcome history. Agents
+that have historically produced good results for similar tasks get
+selected. Agents whose outputs have been rejected by reviewers get
+deprioritised. The LLM still plans — but its choices are informed by
+evidence.
+
+### "Our agent is a ChatModel and a prompt string. It has no identity."
+
+LC4j agents are defined by their system prompt. They have no persistent
+identity, no track record, no capabilities that can be queried, and no
+reputation. Two agents that happen to have the same prompt are
+indistinguishable.
+
+**casehub-langchain4j-eidos** gives agents structured identity:
+personality from 48 archetypes (Hartwell & Chen), weighted disposition
+axes, goal narratives, epistemic domains, and capability declarations
+with health probing. The system prompt is rendered dynamically from this
+identity — per invocation, per context. An agent's reputation evolves
+from outcomes across sessions. This is not prompt engineering — it is
+agent architecture.
+
+### "Our agents communicate via method calls. We can't audit what they said."
+
+LC4j's multi-agent patterns (supervisor, sequence, parallel) coordinate
+via direct method invocations and shared `AgenticScope` state. There is
+no record of what agent A said to agent B, no access control on who can
+read shared state, and no structured protocol for multi-agent
+deliberation.
+
+**casehub-langchain4j-qhorus** gives agents typed communication channels
+with five delivery semantics, access controls, rate limiting, and
+delivery tracking. Messages are `MessageLedgerEntry` records — auditable,
+tamper-evident. The normative commitment layer (speech-act theory) means
+a promise creates an enforceable obligation and violations are detected.
+This is structured inter-agent communication, not shared mutable state.
+
+### "An agent tool call failed and the whole pipeline crashed."
+
+LC4j has no resilience layer. A failed tool call or a model timeout is
+a hard stop. A hung agent blocks forever. There is no retry, no dead
+letter queue, no circuit breaker, no cost budget.
+
+**casehub-langchain4j-resilience** adds `DeadLetterQueue`,
+`RetryPolicy`, `PoisonPillDetector`, and `WatchdogRecoveryBridge`. Failed
+agent invocations retry with backoff. Hung agents are detected and
+cancelled. Concurrent invocations are budget-limited for cost control.
+The developer adds one dependency. Their agent pipeline becomes
+production-hardened.
+
+## The Four Phases
+
+### Phase 1 — Your LC4j App Is Now Enterprise-Class
+
+Add a dependency. No code changes. Your existing application gains:
+
+- **Audit** — every LLM call produces a tamper-evident ledger entry with
+  Merkle proof inclusion, EU AI Act compliance supplements, token usage,
+  and cost tracking. Implemented via `ChatModelListener` — wraps any
+  ChatModel transparently.
+
+- **Tenancy** — your ChatMemoryStore, EmbeddingStore, and ContentRetriever
+  become multi-tenant. Decorators scope every operation to the current
+  tenant. Works with whatever backing implementation you already chose.
+
+- **Governance** — agent invocations gain causal lineage (who called what
+  and why), oversight gates (human approval before sensitive actions), and
+  trust routing (agents with better track records get selected first).
+
+- **Hybrid Search** — replace vector-only retrieval with SPLADE sparse +
+  dense embeddings + reciprocal rank fusion + cross-encoder reranking.
+  26–31% NDCG improvement. Fills an acknowledged gap in LC4j (#4087).
+
+- **Resilience** — failed agent tool calls go to a dead letter queue and
+  retry instead of crashing. Hung agents get detected and cancelled.
+  Concurrent invocations are budget-limited for cost control.
+
+- **Quality Gating** — corrective RAG automatically discards low-relevance
+  retrieved chunks before the LLM sees them, reducing hallucination.
+
+### Phase 2 — Your LC4j Agents Are Real Distributed Agents
+
+This is where LC4j agents gain capabilities that don't exist anywhere
+else in the Java ecosystem:
+
+- **Agent Identity (Eidos)** — your agent goes from a hardcoded system
+  prompt to a dynamically rendered identity with personality (48
+  archetypes from Hartwell & Chen), disposition axes, goal narratives,
+  and epistemic confidence. The same agent code behaves differently
+  depending on context.
+
+- **Agent Reputation (Eidos + Ledger)** — other agents and humans
+  rate your agent's outputs. Bayesian Beta trust scores evolve from
+  verifiable peer review. Your agent's reputation is earned, not
+  declared.
+
+- **Typed Communication (Qhorus)** — your agents get structured messaging
+  channels with five delivery semantics, access controls, rate limiting,
+  and delivery tracking. Not method calls — real inter-agent communication
+  with auditable history.
+
+- **Normative Commitments (Qhorus)** — agent messages carry deontic
+  obligations. A promise creates an enforceable commitment. A request
+  creates an expectation. Violations are detected and recorded. This is
+  speech-act theory applied to multi-agent systems.
+
+- **Human-in-the-Loop (Work)** — your agent creates a WorkItem for human
+  review. 11-status lifecycle, SLA breach policies with escalation chains,
+  M-of-N group completion, delegation. The agent pauses; a human decides;
+  the agent resumes.
+
+- **Advanced RAG (Neocortex)** — HyDE query expansion, step-back
+  reformulation, NLI hallucination detection via local ONNX inference,
+  structured attestation records for every agent decision.
+
+### Phase 3 — Enterprise-Grade Infrastructure
+
+For deployments that need deeper capability backing:
+
+- **Case-Based Reasoning Memory** — agents learn from past cases.
+  Similarity-weighted retrieval, outcome feedback loops, plan adaptation.
+  A different memory paradigm from ChatMemoryStore — not competing, a
+  different category.
+
+- **SPLADE Sparse Embeddings** — learned term expansion for domain-specific
+  vocabulary. The only JVM implementation available.
+
+- **Corpus Management** — enterprise document lifecycle with versioning,
+  provenance tracking, and incremental re-indexing. Beyond LC4j's basic
+  Tika parsing.
+
+### Phase 4 — Full Platform Orchestration
+
+For teams ready to leverage CaseHub's complete orchestration capabilities
+alongside their LC4j agents:
+
+- **Case Lifecycle** — agents operate within managed cases with goals,
+  milestones, and stage gating. The execution kernel handles routing,
+  binding evaluation, and loop control.
+
+- **Orchestration Patterns** — annotation-driven supervisor, sequence,
+  parallel, debate, and voting patterns. CaseHub's patterns compose with
+  governance meta-annotations — oversight gates, trust routing, and
+  attestation apply uniformly.
+
+- **DAG Execution** — dependency-graph-aware parallel dispatch with
+  ANY_OF/ALL_OF join types and contingency nodes. Beyond LC4j's flat
+  parallel.
+
+- **Multi-Agent Protocols** — structured conversation, negotiation,
+  judgment, and coalition formation. Turn-based, policy-driven, with
+  consensus and termination conditions.
+
+## Design Principles
+
+**Additive, not competitive.** We wrap LangChain4j components — we don't
+replace them. A developer keeps their ChatModel, their memory store, their
+orchestration pattern. CaseHub adds enterprise concerns on top.
+
+**Classpath activation.** Add a dependency. No configuration. Enterprise
+capabilities activate automatically. If CaseHub dependencies are absent,
+modules degrade gracefully — log a warning, never fail.
+
+**Justified expansion.** Every module beyond the Phase 1 core must
+document why it exists: (1) LangChain4j acknowledged the gap, (2) it's a
+different category not competing with an LC4j capability, or (3) a
+customer requested it. This is a public commitment.
+
+**Both frameworks.** Every module ships with Quarkus CDI and Spring
+auto-configuration from day one.
+
+## Architecture
+
+```
+casehub-langchain4j
+  → langchain4j-core         Your existing LC4j code
+  → casehub-platform         Identity, tenancy, agent SPIs
+  → casehub-ledger           Audit trail, trust scoring
+  → casehub-neocortex        Cognition — RAG, memory, inference
+  → casehub-eidos            Agent identity, personality
+  → casehub-qhorus           Channels, deliberation
+  → casehub-work             Human tasks, SLA, escalation
+  → casehub-engine           Case lifecycle, orchestration
+  → casehub-blocks           Annotation patterns, governance
+```
+
+No upstream CaseHub repo depends on this repo. The dependency arrow
+points one way. CaseHub enriches LangChain4j — LangChain4j doesn't need
+to know CaseHub exists.
+
+## Getting Started
+
+```xml
+<!-- Phase 1: Audit every LLM call -->
+<dependency>
+    <groupId>io.casehub.langchain4j</groupId>
+    <artifactId>casehub-langchain4j-audit</artifactId>
+</dependency>
+
+<!-- Phase 1: Multi-tenant memory -->
+<dependency>
+    <groupId>io.casehub.langchain4j</groupId>
+    <artifactId>casehub-langchain4j-tenancy</artifactId>
+</dependency>
+
+<!-- Phase 2: Agent identity -->
+<dependency>
+    <groupId>io.casehub.langchain4j</groupId>
+    <artifactId>casehub-langchain4j-eidos</artifactId>
+</dependency>
+```
+
+No code changes. No configuration. Your existing LC4j application gains
+enterprise capabilities.
