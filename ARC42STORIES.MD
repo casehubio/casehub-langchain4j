@@ -162,7 +162,7 @@ C4Context
 - C9 before C10: hybrid-search-core must compile before CDI/Spring wiring
 - C3/C5/C7/C9 are independent of each other: four SPI groups have no shared runtime dependency
 - C11–C13 after C3–C10: Phase 2 builds on Phase 1's established patterns
-- C14–C18 after C11–C13: Phase 3 showcases require Phase 1+2 modules as building blocks
+- C14–C22 after C10: Phase 3 platform capability guides require Phase 1 modules as the bridge layer. Each chapter is independent — can be written in any order based on demand. Chapters get fleshed out with more detail as treblereel approaches them.
 
 ---
 
@@ -363,7 +363,7 @@ Modules that write ledger entries follow the same pattern:
 | J4: Enterprise Concerns — Governance | `AgentListener` → oversight gates + trust routing + causal lineage | C7–C8 | 🔲 |
 | J5: Enterprise Implementation — Hybrid Search | `ContentRetriever` with SPLADE + dense + RRF (justified by LC4j #4087) | C9–C10 | 🔲 |
 | J6: Enterprise Implementations — Extended (Phase 2) | CBR memory, SPLADE embedding, corpus ingestion — each with documented justification | C11–C13 | 🔲 |
-| J7: Application Showcase (Phase 3) | Reference architectures demonstrating full CaseHub + LC4j integration | C14–C18 | 🔲 |
+| J7: Platform Capability Guide (Phase 3) | Systematic walkthrough of the full CaseHub platform through an LC4j lens — engine, blocks, neocortex, work, ledger, qhorus, eidos, connectors, desiredstate | C14–C22 | 🔲 |
 
 ### §9.2 Chapter Index
 
@@ -381,11 +381,15 @@ flowchart LR
   C4 --> C11["C11: CBR Memory\nL1+L2+L3"]
   C6 --> C12["C12: SPLADE Embedding\nL1+L2+L3"]
   C8 --> C13["C13: Corpus Ingestion\nL1+L2+L3"]
-  C10 --> C14["C14: Governed Supervisor\nL5"]
-  C11 --> C15["C15: Adaptive Selection\nL5"]
-  C13 --> C16["C16: Cross-Boundary Lineage\nL5"]
-  C14 --> C17["C17: SLA Workflows\nL5"]
-  C15 --> C18["C18: Multi-Agent Deliberation\nL5"]
+  C10 --> C14["C14: Engine\nL5"]
+  C10 --> C15["C15: Blocks\nL5"]
+  C10 --> C16["C16: Neocortex\nL5"]
+  C10 --> C17["C17: Work\nL5"]
+  C10 --> C18["C18: Ledger\nL5"]
+  C10 --> C19["C19: Qhorus\nL5"]
+  C10 --> C20["C20: Eidos\nL5"]
+  C10 --> C21["C21: Connectors\nL5"]
+  C10 --> C22["C22: DesiredState\nL5"]
 
   style C1 fill:#FFD700,color:#000
   style C2 fill:#FFD700,color:#000
@@ -405,6 +409,10 @@ flowchart LR
   style C16 fill:#FFFFFF,stroke:#333
   style C17 fill:#FFFFFF,stroke:#333
   style C18 fill:#FFFFFF,stroke:#333
+  style C19 fill:#FFFFFF,stroke:#333
+  style C20 fill:#FFFFFF,stroke:#333
+  style C21 fill:#FFFFFF,stroke:#333
+  style C22 fill:#FFFFFF,stroke:#333
 ```
 
 Legend: 🟡 In Progress | ⬜ Not Started | 🟢 Complete
@@ -424,11 +432,15 @@ Legend: 🟡 In Progress | ⬜ Not Started | 🟢 Complete
 | 11 | CBR Memory | J6 | L1, L2, L3 | 2 | 🔲 |
 | 12 | SPLADE Embedding | J6 | L1, L2, L3 | 2 | 🔲 |
 | 13 | Corpus Ingestion | J6 | L1, L2, L3 | 2 | 🔲 |
-| 14 | Governed Supervisor Showcase | J7 | L5 | 3 | 🔲 |
-| 15 | Adaptive Agent Selection Showcase | J7 | L5 | 3 | 🔲 |
-| 16 | Cross-Boundary Lineage Showcase | J7 | L5 | 3 | 🔲 |
-| 17 | SLA-Enforced Workflows Showcase | J7 | L5 | 3 | 🔲 |
-| 18 | Multi-Agent Deliberation Showcase | J7 | L5 | 3 | 🔲 |
+| 14 | Engine: Case Lifecycle and Orchestration | J7 | L5 | 3 | 🔲 |
+| 15 | Blocks: Orchestration Patterns and Annotations | J7 | L5 | 3 | 🔲 |
+| 16 | Neocortex: Cognitive Capabilities | J7 | L5 | 3 | 🔲 |
+| 17 | Work: Task Management and Human Review | J7 | L5 | 3 | 🔲 |
+| 18 | Ledger: Trust, Compliance, and Lineage | J7 | L5 | 3 | 🔲 |
+| 19 | Qhorus: Channels and Deliberation | J7 | L5 | 3 | 🔲 |
+| 20 | Eidos: Agent Identity and Personality | J7 | L5 | 3 | 🔲 |
+| 21 | Connectors and Streams: External Integration | J7 | L5 | 3 | 🔲 |
+| 22 | DesiredState: Fault Diagnosis and Reconciliation | J7 | L5 | 3 | 🔲 |
 
 **Layer x Chapter matrix**
 
@@ -786,68 +798,130 @@ An `EmbeddingModel` implementation providing SPLADE sparse embeddings alongside 
 
 ---
 
-#### C14 — Governed Supervisor Showcase (Phase 3)
+#### C14 — Engine: Case Lifecycle and Orchestration (Phase 3)
 
-**Journey:** J7 | **Sequence:** 14 of 18 | **Status:** 🔲
-**Spec:** `2026-09-24-phase-3-application-showcase.md` §Governed Supervisor
+**Journey:** J7 | **Sequence:** 14 of 22 | **Status:** 🔲
+**Spec:** Phase 3 spec (to be detailed as Phase 3 approaches)
 
 **What this delivers**
-Reference architecture: LC4j `@SupervisorAgent` orchestrating a multi-worker case. CaseHub provides the execution kernel (routing, binding, stage gating). Ledger records every decision. Trust scores evolve from outcomes. Oversight gates pause sensitive actions.
+Guide and examples showing LC4j developers how to use casehub-engine's case lifecycle, goal model, binding evaluator, stage gating, workers, and loop control. LC4j agents become workers in governed case instances. The execution kernel (routing, binding, milestones, goals) orchestrates when and how agents are invoked.
+
+**Key capabilities:** CaseContext, EventLog, Goal/GoalKind, CasePlanModel, PlanItem, Stage binding, LoopControl, WorkerProvisioner, SubCase coordination.
 
 **Issues**
-- TBD — governed supervisor example
+- TBD — engine case lifecycle guide + example
 
 ---
 
-#### C15 — Adaptive Agent Selection Showcase (Phase 3)
+#### C15 — Blocks: Orchestration Patterns and Annotations (Phase 3)
 
-**Journey:** J7 | **Sequence:** 15 of 18 | **Status:** 🔲
-**Spec:** `2026-09-24-phase-3-application-showcase.md` §Adaptive Agent Selection
+**Journey:** J7 | **Sequence:** 15 of 22 | **Status:** 🔲
 
 **What this delivers**
-Reference architecture: CBR remembers which agents performed well on similar past cases. LC4j developer gets adaptive routing without writing routing logic.
+Guide showing LC4j developers how CaseHub's annotation-driven orchestration patterns (@Supervisor, @Sequence, @Parallel, @Debate, @Voting) relate to LC4j's patterns. How to use both side by side — LC4j for internal agent logic, CaseHub annotations for external orchestration with governance meta-annotations (@OversightGate, @TrustRouted, @Attestation).
+
+**Key capabilities:** ExecutionModel<T>, 5 composable SPIs (routing, decomposition, activation, aggregation, termination), governance meta-annotations, HTN planning.
 
 **Issues**
-- TBD — adaptive agent selection example
+- TBD — blocks orchestration patterns guide + example
 
 ---
 
-#### C16 — Cross-Boundary Lineage Showcase (Phase 3)
+#### C16 — Neocortex: Cognitive Capabilities (Phase 3)
 
-**Journey:** J7 | **Sequence:** 16 of 18 | **Status:** 🔲
-**Spec:** `2026-09-24-phase-3-application-showcase.md` §Cross-Boundary Lineage
+**Journey:** J7 | **Sequence:** 16 of 22 | **Status:** 🔲
 
 **What this delivers**
-Reference architecture: LC4j agent → MCP tool → CaseHub worker → LC4j agent. One tamper-evident ledger trail across all boundaries.
+Guide showing LC4j developers how to leverage neocortex's full cognitive stack: CBR memory (case-based reasoning with outcome learning), hybrid RAG (SPLADE + dense + cross-encoder), ONNX inference (NLI, classification, regression), cognitive observability, corpus management. Each capability accessible from LC4j code via the bridges established in Phases 1–2.
+
+**Key capabilities:** CaseContextRetriever, CbrRecordStore, SparseEmbedder, CrossEncoderReranker, NliClassifier, TextClassifier, CognitionTraceService, CorpusIngestionService.
 
 **Issues**
-- TBD — cross-boundary lineage example
+- TBD — neocortex cognitive capabilities guide + example
 
 ---
 
-#### C17 — SLA-Enforced Workflows Showcase (Phase 3)
+#### C17 — Work: Task Management and Human Review (Phase 3)
 
-**Journey:** J7 | **Sequence:** 17 of 18 | **Status:** 🔲
-**Spec:** `2026-09-24-phase-3-application-showcase.md` §SLA-Enforced Workflows
+**Journey:** J7 | **Sequence:** 17 of 22 | **Status:** 🔲
 
 **What this delivers**
-Reference architecture: LC4j agents within CaseHub's work management — SLA timers, escalation, failure rerouting, dead letter queues.
+Guide showing LC4j developers how to use casehub-work's task management alongside LC4j agents: WorkItems, SLA enforcement (breach policies, escalation), human review workflows, work queues, approval chains. LC4j agents operate within managed workflows — timers, failure rerouting, dead letter queues are transparent.
+
+**Key capabilities:** WorkItem, SlaBreachPolicy, WorkQueue, EscalationService, HumanProvisioner, DeadLetterQueue, RetryPolicy.
 
 **Issues**
-- TBD — SLA-enforced workflow example
+- TBD — work task management guide + example
 
 ---
 
-#### C18 — Multi-Agent Deliberation Showcase (Phase 3)
+#### C18 — Ledger: Trust, Compliance, and Lineage (Phase 3)
 
-**Journey:** J7 | **Sequence:** 18 of 18 | **Status:** 🔲
-**Spec:** `2026-09-24-phase-3-application-showcase.md` §Multi-Agent Deliberation
+**Journey:** J7 | **Sequence:** 18 of 22 | **Status:** 🔲
 
 **What this delivers**
-Reference architecture: LC4j agents in Qhorus structured debate channels. Auditable deliberation with governed outcomes.
+Guide showing LC4j developers the full ledger capability beyond basic audit: trust scoring (Bayesian Beta, EigenTrust), attestation chains, W3C PROV-DM lineage export, GDPR Art.17 token-severing erasure, EU AI Act compliance supplements. How trust scores drive agent selection and how lineage chains prove decisions.
+
+**Key capabilities:** TrustSignalProvider, AttestationPolicy, CaseLedgerEntry, ComplianceSupplement, ErasureReceiptLedgerEntry, W3C PROV-DM export.
 
 **Issues**
-- TBD — multi-agent deliberation example
+- TBD — ledger trust and compliance guide + example
+
+---
+
+#### C19 — Qhorus: Channels and Deliberation (Phase 3)
+
+**Journey:** J7 | **Sequence:** 19 of 22 | **Status:** 🔲
+
+**What this delivers**
+Guide showing LC4j developers how to use Qhorus channels for structured inter-agent communication: named channels, large artefact sharing, wait_for_reply semantics, peer-to-peer coordination. LC4j agents participate in structured debate — propose, critique, synthesise positions with auditable outcomes.
+
+**Key capabilities:** QhorusChannel, share_data/get_shared_data, wait_for_reply, MessageLedgerEntry, deliberation patterns.
+
+**Issues**
+- TBD — qhorus channels and deliberation guide + example
+
+---
+
+#### C20 — Eidos: Agent Identity and Personality (Phase 3)
+
+**Journey:** J7 | **Sequence:** 20 of 22 | **Status:** 🔲
+
+**What this delivers**
+Guide showing LC4j developers how to give their agents rich identity: system prompt rendering with semantic enrichment (identity, role, capability, disposition, goal narratives), personality composition, knowledge graph-backed reputation, Wilson lower-bound scoring. LC4j agents become identifiable, trackable entities with evolving reputations.
+
+**Key capabilities:** SystemPromptRenderer, PersonalityComposition, AgentGoals, AgentConstraints, Disposition, epistemic confidence via ScalarRegressor.
+
+**Issues**
+- TBD — eidos agent identity guide + example
+
+---
+
+#### C21 — Connectors and Streams: External Integration (Phase 3)
+
+**Journey:** J7 | **Sequence:** 21 of 22 | **Status:** 🔲
+
+**What this delivers**
+Guide showing LC4j developers how to connect their agents to external systems via CaseHub's stream adapters (Kafka, AMQP, webhook, poll, Camel) and endpoint registry. CloudEvent-envelope throughout. LC4j agents can receive external events and produce responses through managed channels.
+
+**Key capabilities:** StreamContext (tenancy propagation in async), EndpointRegistry, CloudEvent envelope, 5 classpath-activated transports, Slack channel backend.
+
+**Issues**
+- TBD — connectors and streams guide + example
+
+---
+
+#### C22 — DesiredState: Fault Diagnosis and Reconciliation (Phase 3)
+
+**Journey:** J7 | **Sequence:** 22 of 22 | **Status:** 🔲
+
+**What this delivers**
+Guide showing LC4j developers how to use desired-state management for automated fault diagnosis and reconciliation loops. LC4j agents can serve as AI_REVIEW fault nodes — the LLM diagnoses faults and recommends corrective actions within a governed reconciliation loop.
+
+**Key capabilities:** DesiredState, NodeSpec, FaultPolicy, AI_REVIEW fault node, reconciliation loop, LlmGanglion.
+
+**Issues**
+- TBD — desiredstate fault diagnosis guide + example
 
 ---
 
