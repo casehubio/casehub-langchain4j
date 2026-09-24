@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.casehub</groupId>
+        <artifactId>casehub-parent</artifactId>
+        <version>0.2-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <artifactId>casehub-langchain4j-parent</artifactId>
+    <version>0.2-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>CaseHub LangChain4j — Enterprise Enrichment</name>
+    <description>Additive enterprise concerns for LangChain4j: audit, tenancy, governance, hybrid search.</description>
+
+    <modules>
+        <module>audit-core</module>
+        <module>audit</module>
+        <module>audit-spring</module>
+        <module>tenancy-core</module>
+        <module>tenancy</module>
+        <module>tenancy-spring</module>
+        <module>governance-core</module>
+        <module>governance</module>
+        <module>governance-spring</module>
+        <module>hybrid-search-core</module>
+        <module>hybrid-search</module>
+        <module>hybrid-search-spring</module>
+        <module>agents-core</module>
+        <module>agents</module>
+        <module>agents-spring</module>
+        <module>bom</module>
+        <module>examples</module>
+    </modules>
+
+    <properties>
+        <version.dev.langchain4j>1.14.1</version.dev.langchain4j>
+        <version.io.casehub>0.2-SNAPSHOT</version.io.casehub>
+        <version.io.casehub.ledger>0.2-SNAPSHOT</version.io.casehub.ledger>
+        <version.quarkus.platform>3.32.2</version.quarkus.platform>
+        <spring-boot.version>4.1.0</spring-boot.version>
+        <maven.deploy.skip>false</maven.deploy.skip>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Quarkus BOM -->
+            <dependency>
+                <groupId>io.quarkus.platform</groupId>
+                <artifactId>quarkus-bom</artifactId>
+                <version>${version.quarkus.platform}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- LangChain4j -->
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-core</artifactId>
+                <version>${version.dev.langchain4j}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j</artifactId>
+                <version>${version.dev.langchain4j}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-agentic</artifactId>
+                <version>${version.dev.langchain4j}</version>
+            </dependency>
+
+            <!-- CaseHub modules -->
+            <dependency>
+                <groupId>io.casehub</groupId>
+                <artifactId>casehub-platform-api</artifactId>
+                <version>${version.io.casehub}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub</groupId>
+                <artifactId>casehub-platform-agent-api</artifactId>
+                <version>${version.io.casehub}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub</groupId>
+                <artifactId>casehub-ledger-api</artifactId>
+                <version>${version.io.casehub.ledger}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub</groupId>
+                <artifactId>casehub-neocortex-rag-api</artifactId>
+                <version>${version.io.casehub}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub</groupId>
+                <artifactId>casehub-engine-api</artifactId>
+                <version>${version.io.casehub}</version>
+            </dependency>
+
+            <!-- This project's own modules -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-audit-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tenancy-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-governance-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-hybrid-search-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-agents-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Spring Boot -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-autoconfigure</artifactId>
+                <version>${spring-boot.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/casehubio/*</url>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/casehubio/casehub-langchain4j</url>
+        </repository>
+    </distributionManagement>
+
+    <scm>
+        <connection>scm:git:https://github.com/casehubio/casehub-langchain4j.git</connection>
+        <developerConnection>scm:git:https://github.com/casehubio/casehub-langchain4j.git</developerConnection>
+        <url>https://github.com/casehubio/casehub-langchain4j</url>
+    </scm>
+</project>

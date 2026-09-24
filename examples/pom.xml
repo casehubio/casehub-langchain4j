@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.casehub.langchain4j</groupId>
+        <artifactId>casehub-langchain4j-parent</artifactId>
+        <version>0.2-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>casehub-langchain4j-examples</artifactId>
+    <packaging>jar</packaging>
+    <name>CaseHub LangChain4j :: Examples</name>
+    <description>Minimal working examples showing how to add CaseHub enrichments to LC4j apps.</description>
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.casehub.langchain4j</groupId>
+            <artifactId>casehub-langchain4j-audit-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-core</artifactId>
+        </dependency>
+    </dependencies>
+</project>

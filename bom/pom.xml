@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.casehub.langchain4j</groupId>
+        <artifactId>casehub-langchain4j-parent</artifactId>
+        <version>0.2-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>casehub-langchain4j-bom</artifactId>
+    <packaging>pom</packaging>
+    <name>CaseHub LangChain4j :: BOM</name>
+    <description>Bill of Materials importing all casehub-langchain4j modules.</description>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Audit -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-audit-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-audit</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-audit-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Tenancy -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tenancy-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tenancy</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tenancy-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Governance -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-governance-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-governance</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-governance-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Hybrid Search -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-hybrid-search-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-hybrid-search</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-hybrid-search-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Agents (ChatModel/AgentProvider bridge) -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-agents-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-agents</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-agents-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
