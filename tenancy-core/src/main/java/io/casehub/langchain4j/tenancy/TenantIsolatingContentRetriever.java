@@ -3,7 +3,7 @@ package io.casehub.langchain4j.tenancy;
 import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.query.Query;
-import io.casehub.platform.identity.CurrentPrincipal;
+import io.casehub.platform.api.identity.CurrentPrincipal;
 
 import java.util.List;
 

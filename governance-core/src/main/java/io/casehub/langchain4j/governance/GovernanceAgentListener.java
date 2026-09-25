@@ -66,22 +66,22 @@ public class GovernanceAgentListener implements AgentListener {
         // TODO: Record failure in ledger
         // TODO: Decrease trust score for this agent
 
-        entryWriter.recordInvocationError(agentName, error.cause());
+        entryWriter.recordInvocationError(agentName, error.error());
         LOG.warnf("Governance: agent invocation error — agent=%s, error=%s",
-                agentName, error.cause().getMessage());
+                agentName, error.error().getMessage());
     }
 
     @Override
     public void beforeAgentToolExecution(BeforeAgentToolExecution before) {
         // TODO: Check OversightGate on tool execution if tool is governance-gated
-        LOG.debugf("Governance: tool execution starting — tool=%s", before.toolName());
+        LOG.debugf("Governance: tool execution starting — tool=%s", before.toolExecution().request().name());
     }
 
     @Override
     public void afterAgentToolExecution(AfterAgentToolExecution after) {
         // TODO: Record tool call in causal lineage
-        entryWriter.recordToolExecution(after.toolName(), after.agenticScope().memoryId());
-        LOG.debugf("Governance: tool execution complete — tool=%s", after.toolName());
+        entryWriter.recordToolExecution(after.toolExecution().request().name(), after.agenticScope().memoryId());
+        LOG.debugf("Governance: tool execution complete — tool=%s", after.toolExecution().request().name());
     }
 
     @Override

@@ -14,15 +14,15 @@ public class LoggingAuditEntryWriter implements AuditEntryWriter {
     @Override
     public void writeCompletion(ChatRequest request, ChatResponse response, long latencyMs) {
         LOG.infof("AUDIT [completion] model=%s latency=%dms tokens=%s",
-                request.model(),
+                request.modelName(),
                 latencyMs,
-                response.metadata().tokenUsage());
+                response.tokenUsage());
     }
 
     @Override
     public void writeError(ChatRequest request, Throwable error) {
         LOG.warnf("AUDIT [error] model=%s error=%s: %s",
-                request.model(),
+                request.modelName(),
                 error.getClass().getSimpleName(),
                 error.getMessage());
     }

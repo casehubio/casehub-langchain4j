@@ -11,6 +11,7 @@
         <relativePath/>
     </parent>
 
+    <groupId>io.casehub.langchain4j</groupId>
     <artifactId>casehub-langchain4j-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -40,6 +41,7 @@
 
     <properties>
         <version.dev.langchain4j>1.14.1</version.dev.langchain4j>
+        <version.dev.langchain4j.agentic>1.16.2-beta26</version.dev.langchain4j.agentic>
         <version.io.casehub>0.2-SNAPSHOT</version.io.casehub>
         <version.io.casehub.ledger>0.2-SNAPSHOT</version.io.casehub.ledger>
         <version.quarkus.platform>3.32.2</version.quarkus.platform>
@@ -72,7 +74,7 @@
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-agentic</artifactId>
-                <version>${version.dev.langchain4j}</version>
+                <version>${version.dev.langchain4j.agentic}</version>
             </dependency>
 
             <!-- CaseHub modules -->

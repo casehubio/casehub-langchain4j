@@ -31,7 +31,7 @@ public class CasehubChatModelListener implements ChatModelListener {
     public void onRequest(ChatModelRequestContext ctx) {
         ctx.attributes().put(ATTR_START_NANOS, System.nanoTime());
         LOG.debugf("Audit: LLM request — model=%s, messages=%d",
-                ctx.chatRequest().model(),
+                ctx.chatRequest().modelName(),
                 ctx.chatRequest().messages().size());
     }
 
@@ -50,7 +50,7 @@ public class CasehubChatModelListener implements ChatModelListener {
 
         LOG.debugf("Audit: LLM response — latency=%dms, tokens=%s",
                 latencyMs,
-                response.metadata().tokenUsage());
+                response.tokenUsage());
     }
 
     @Override

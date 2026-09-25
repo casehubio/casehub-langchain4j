@@ -1,6 +1,6 @@
 package io.casehub.langchain4j.tenancy.spring;
 
-import io.casehub.platform.identity.CurrentPrincipal;
+import io.casehub.platform.api.identity.CurrentPrincipal;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Configuration;
 

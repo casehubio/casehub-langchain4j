@@ -2,7 +2,7 @@ package io.casehub.langchain4j.tenancy;
 
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
-import io.casehub.platform.identity.CurrentPrincipal;
+import io.casehub.platform.api.identity.CurrentPrincipal;
 
 import java.util.List;
 

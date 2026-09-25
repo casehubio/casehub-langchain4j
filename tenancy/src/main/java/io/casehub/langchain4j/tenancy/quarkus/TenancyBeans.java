@@ -2,7 +2,7 @@ package io.casehub.langchain4j.tenancy.quarkus;
 
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingChatMemoryStore;
-import io.casehub.platform.identity.CurrentPrincipal;
+import io.casehub.platform.api.identity.CurrentPrincipal;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
