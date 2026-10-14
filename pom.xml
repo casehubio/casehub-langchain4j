@@ -153,6 +153,10 @@
             <id>github</id>
             <url>https://maven.pkg.github.com/casehubio/casehub-langchain4j</url>
         </repository>
+        <snapshotRepository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/casehubio/casehub-langchain4j</url>
+        </snapshotRepository>
     </distributionManagement>
 
     <scm>
