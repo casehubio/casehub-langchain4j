@@ -7,13 +7,13 @@
     <parent>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-parent</artifactId>
-        <version>0.2-SNAPSHOT</version>
+        <version>0.3</version>
         <relativePath/>
     </parent>
 
     <groupId>io.casehub.langchain4j</groupId>
     <artifactId>casehub-langchain4j-parent</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>0.3</version>
     <packaging>pom</packaging>
 
     <name>CaseHub LangChain4j — Enterprise Enrichment</name>
@@ -42,8 +42,8 @@
     <properties>
         <version.dev.langchain4j>1.14.1</version.dev.langchain4j>
         <version.dev.langchain4j.agentic>1.16.2-beta26</version.dev.langchain4j.agentic>
-        <version.io.casehub>0.2-SNAPSHOT</version.io.casehub>
-        <version.io.casehub.ledger>0.2-SNAPSHOT</version.io.casehub.ledger>
+        <version.io.casehub>0.3</version.io.casehub>
+        <version.io.casehub.ledger>0.3</version.io.casehub.ledger>
         <version.quarkus.platform>3.32.2</version.quarkus.platform>
         <spring-boot.version>4.1.0</spring-boot.version>
         <maven.deploy.skip>false</maven.deploy.skip>
