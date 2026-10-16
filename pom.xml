@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.casehub</groupId>
         <artifactId>casehub-parent</artifactId>
-        <version>0.4-SNAPSHOT</version>
+        <version>${revision}</version>
         <relativePath/>
     </parent>
 
@@ -40,6 +40,7 @@
     </modules>
 
     <properties>
+    <revision>0.4-SNAPSHOT</revision>
         <version.dev.langchain4j>1.14.1</version.dev.langchain4j>
         <version.dev.langchain4j.agentic>1.16.2-beta26</version.dev.langchain4j.agentic>
         <version.io.casehub>0.4-SNAPSHOT</version.io.casehub>
