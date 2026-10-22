@@ -303,7 +303,7 @@ casehub-langchain4j
   → casehub-qhorus           Channels, deliberation
   → casehub-work             Human tasks, SLA, escalation
   → casehub-engine           Case lifecycle, orchestration
-  → casehub-blocks           Annotation patterns, governance
+  → casehub-agency           Annotation patterns, governance
 ```
 
 No upstream CaseHub repo depends on this repo. The dependency arrow
