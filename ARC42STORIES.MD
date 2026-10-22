@@ -3,9 +3,9 @@
 **Spec:** Arc42Stories v0.1
 **Profile:** CaseHub — Integration tier
 **Profile ref:** `../parent/docs/arc42stories-casehub-profile.md` · fallback: `https://raw.githubusercontent.com/casehubio/parent/main/docs/arc42stories-casehub-profile.md`
-**Build position:** Integration tier — depends on platform, ledger, neocortex, engine, eidos, qhorus, work, blocks. No downstream casehubio dependents.
+**Build position:** Integration tier — depends on platform, ledger, neocortex, engine, eidos, qhorus, work, agency. No downstream casehubio dependents.
 **Consumed by:** Application-tier repos (aml, clinical, devtown, soc, life) and external LC4j developers
-**Depends on:** casehub-platform, casehub-ledger, casehub-neocortex, casehub-engine, casehub-eidos, casehub-qhorus, casehub-work, casehub-blocks, langchain4j-core, langchain4j-agentic
+**Depends on:** casehub-platform, casehub-ledger, casehub-neocortex, casehub-engine, casehub-eidos, casehub-qhorus, casehub-work, casehub-agency, langchain4j-core, langchain4j-agentic
 
 ---
 
@@ -97,7 +97,7 @@ C4Context
   System_Boundary(clc4j, "casehub-langchain4j") {
     System(phase1, "Phase 1: Enterprise Concerns", "Audit, tenancy, governance, hybrid search, resilience")
     System(phase2, "Phase 2: Distributed Agent Capabilities", "Eidos identity, Qhorus channels, Work human-in-the-loop, trust")
-    System(phase34, "Phase 3+4: Infrastructure + Orchestration", "CBR memory, SPLADE, engine lifecycle, blocks patterns")
+    System(phase34, "Phase 3+4: Infrastructure + Orchestration", "CBR memory, SPLADE, engine lifecycle, agency patterns")
   }
 
   System_Ext(lc4j, "langchain4j", "ChatModel, EmbeddingStore, ContentRetriever, AiService, agentic patterns")
@@ -108,7 +108,7 @@ C4Context
   System_Ext(eidos, "casehub-eidos", "Agent identity, personality, epistemic confidence")
   System_Ext(qhorus, "casehub-qhorus", "Channels, deliberation, normative commitments")
   System_Ext(work, "casehub-work", "WorkItem, SLA, escalation, human review")
-  System_Ext(blocks, "casehub-blocks", "Orchestration patterns, attestation, oversight")
+  System_Ext(agency, "casehub-agency", "Orchestration patterns, attestation, oversight")
 
   Rel(lc4jDev, lc4j, "builds with")
   Rel(lc4jDev, clc4j, "adds enterprise enrichment")
@@ -120,7 +120,7 @@ C4Context
   Rel(phase2, eidos, "agent identity")
   Rel(phase2, qhorus, "typed channels")
   Rel(phase2, work, "human-in-the-loop")
-  Rel(phase2, blocks, "attestation, oversight")
+  Rel(phase2, agency, "attestation, oversight")
 ```
 
 **Boundary rules:** casehub-langchain4j adds enterprise concerns to LC4j. It does not replace LC4j's core capabilities (model providers, stores, patterns). Domain logic and application-specific workflows belong in application-tier repos. See `STRATEGY.md` for the full positioning.
@@ -321,9 +321,9 @@ Any module beyond Phase 1 requires documented justification in its README:
 |---|---|---|---|---|
 | J1: Foundation | — | Scaffold, agents bridge, CI, BOM, workspace, docs | C1 | 🔲 |
 | J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🔲 |
-| J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, blocks attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
+| J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, agency attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
 | J4: Enterprise Infrastructure | 3 | CBR memory, SPLADE embedding, corpus ingestion, temporal scoring | C19–C22 | 🔲 |
-| J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, blocks patterns + protocols + prompt optimisation, full integration guide | C23–C30 | 🔲 |
+| J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, agency patterns + protocols + prompt optimisation, full integration guide | C23–C30 | 🔲 |
 
 ### §9.2 Chapter Index
 
@@ -461,7 +461,7 @@ The repo exists with Maven multi-module structure, CI pipeline, BOM, workspace, 
 - TBD — move agents-core from platform
 - TBD — move agents from platform (Quarkus CDI)
 - TBD — move agents-spring from platform
-- TBD — update engine/blocks dependencies to new coordinates
+- TBD — update engine/agency dependencies to new coordinates
 - TBD — CI workflow and parent BOM registration
 
 ---
@@ -740,8 +740,8 @@ Every agent decision writes a structured attestation record (verdict, confidence
 **Key capabilities:** `AttestationIntent`, `AttestationWriter`, `OversightGate`, `RiskClassifier`, `IntakeClassifier`.
 
 **Issues**
-- TBD — blocks attestation bridge module
-- TBD — blocks oversight bridge module
+- TBD — agency attestation bridge module
+- TBD — agency oversight bridge module
 
 ---
 
@@ -934,7 +934,7 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | AgentListener API instability | `langchain4j-agentic` is newer than `langchain4j-core` | Monitor LC4j releases. Interface adapter for loose coupling. |
 | Scope creep | Pressure to add modules competing with LC4j | Expansion policy (D8) requires documented justification. STRATEGY.md is the public commitment. |
 | Platform module migration | Moving agent-langchain4j from platform | Deprecate old coordinates before removing. Coordinate with downstream consumers. |
-| Phase 2 dependency breadth | Phase 2 modules depend on eidos, qhorus, work, blocks, ledger | Each Phase 2 module is optional and independent. Adding one doesn't force all. |
+| Phase 2 dependency breadth | Phase 2 modules depend on eidos, qhorus, work, agency, ledger | Each Phase 2 module is optional and independent. Adding one doesn't force all. |
 
 ---
 
