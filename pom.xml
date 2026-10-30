@@ -40,37 +40,15 @@
     </modules>
 
     <properties>
-        <version.dev.langchain4j>1.14.1</version.dev.langchain4j>
         <version.dev.langchain4j.agentic>1.16.2-beta26</version.dev.langchain4j.agentic>
         <version.io.casehub>0.4-SNAPSHOT</version.io.casehub>
         <version.io.casehub.ledger>0.4-SNAPSHOT</version.io.casehub.ledger>
-        <version.quarkus.platform>3.32.2</version.quarkus.platform>
-        <spring-boot.version>4.1.0</spring-boot.version>
         <maven.deploy.skip>false</maven.deploy.skip>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <!-- Quarkus BOM -->
-            <dependency>
-                <groupId>io.quarkus.platform</groupId>
-                <artifactId>quarkus-bom</artifactId>
-                <version>${version.quarkus.platform}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <!-- LangChain4j -->
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j-core</artifactId>
-                <version>${version.dev.langchain4j}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.langchain4j</groupId>
-                <artifactId>langchain4j</artifactId>
-                <version>${version.dev.langchain4j}</version>
-            </dependency>
+            <!-- LangChain4j agentic (not in parent BOM) -->
             <dependency>
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-agentic</artifactId>
@@ -139,16 +117,6 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <repositories>
-        <repository>
-            <id>github</id>
-            <url>https://maven.pkg.github.com/casehubio/*</url>
-            <releases><enabled>false</enabled></releases>
-
-            <snapshots><enabled>true</enabled></snapshots>
-        </repository>
-    </repositories>
 
     <distributionManagement>
         <repository>
