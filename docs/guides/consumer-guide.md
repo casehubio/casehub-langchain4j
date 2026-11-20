@@ -196,15 +196,26 @@ arguments, same tenant) runs **once**; calling it again needs a new approval.
 | `REJECTED`, `CANCELLED`, `OBSOLETE` | refused: rejected (no new request) |
 | `COMPLETED`, not used yet | runs the tool, marks the request used |
 
-**Refused when in doubt.** No tenant, unreadable arguments, a classifier that fails, an unavailable
-WorkItem service, a rule without a fixed approver group, or a rule that needs several approvers
-(quorum) — the call is refused, never run.
+**Refused when in doubt.** A call that needs approval is refused, never run, when there is no
+tenant, a classifier fails, the WorkItem service is unavailable, the rule names no fixed approver
+group, or the rule needs several approvers (quorum). Arguments are read strictly — duplicate keys,
+trailing content or invalid JSON refuse the call — and numbers keep their exact value, so an
+approval matches exactly the arguments the tool receives.
+
+Only WorkItems the gate created for that exact call count as approvals (matching `callerRef`, an
+`agent:` creator, the same approver groups as the current rule); a label added by hand does not.
+The "used" mark is a label, so anyone allowed to remove WorkItem labels could re-arm a spent
+approval — restrict label editing on these WorkItems in casehub-work.
 
 | On the classpath / in the container | Behaviour |
 |---|---|
 | No `@RiskClassifier` beans | every wrapped call runs (INFO at startup) |
 | Classifiers, no `WorkItemApi` bean | calls needing approval are refused (WARN at startup) |
+| Classifiers + `WorkItemApi`, no `CurrentPrincipal` | calls the rules let through run; calls needing approval are refused (WARN at startup and per call) |
 | Classifiers + `WorkItemApi` + `CurrentPrincipal` | full gate |
+
+Quarkus: the governance module injects the `@RiskClassifier` beans and `WorkItemApi`, so they are
+never removed by ArC as unused.
 
 **Spring Boot:** casehub-work provides `WorkItemApi` only for Quarkus today, so in Spring calls
 that need approval are refused unless your application defines a `WorkItemApi` bean
@@ -259,10 +270,11 @@ supply the tenant. A missing piece is reported on first use, not at startup.
 
 audit and tenancy have no configuration.
 
-Quarkus only: the audit and governance modules inject the ledger and identity beans they use
-(`LedgerAppender`, `CurrentPrincipal`, `TrustScoreSource`, `OutcomeRecorder`), so ArC never removes
-them as unused — no `quarkus.arc.unremovable-types` entries are needed. This makes
-`casehub-ledger-api` and `casehub-platform-api` required dependencies of those two Quarkus modules.
+Quarkus only: the audit and governance modules inject the beans they use (`LedgerAppender`,
+`CurrentPrincipal`, `TrustScoreSource`, `OutcomeRecorder`, `@RiskClassifier ActionRiskClassifier`,
+`WorkItemApi`), so ArC never removes them as unused — no `quarkus.arc.unremovable-types` entries
+are needed. This makes `casehub-ledger-api`, `casehub-platform-api`, `casehub-engine-api` and
+`casehub-work-api` required dependencies of those Quarkus modules.
 
 ---
 
