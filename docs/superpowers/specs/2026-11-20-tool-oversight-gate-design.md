@@ -185,6 +185,12 @@ classes, so `governance-core` tests use fakes.
   creates a new request.
 - Tools added to an agent without `wrap(...)` are not gated.
 
+## TODO
+
+- **Spring Boot implementation** (#15). Until casehub-work offers `WorkItemApi` for Spring, or this
+  repo adds a Spring approval adapter over casehub-work's `WorkItemService`, the Spring gate refuses
+  every call that needs approval. The adapter must reproduce the Quarkus behaviour and tests.
+
 ## Left to the builder
 
 Class and method names beyond `OversightToolGate`, `forAgent`, `wrap`; refusal wording; test layout;
