@@ -95,4 +95,35 @@ class WorkItemApprovalPortTest {
 
         assertThat(port.latest("acme", FP).orElseThrow().used()).isTrue();
     }
+
+    @Test
+    void latest_readsEveryPage() {
+        for (int i = 0; i < 60; i++) {
+            fake.put(LABEL, WorkItemStatus.EXPIRED, Instant.now().minusSeconds(3600 + i));
+        }
+        var newest = fake.put(LABEL, WorkItemStatus.COMPLETED, Instant.now());
+
+        assertThat(port.latest("acme", FP).orElseThrow().id()).isEqualTo(newest.id());
+    }
+
+    @Test
+    void latest_ignoresItemWithoutMatchingCallerRef() {
+        fake.putWithProvenance(LABEL, WorkItemStatus.COMPLETED, Instant.now(), "someone-else", "agent:test", "mlro");
+
+        assertThat(port.latest("acme", FP)).isEmpty();
+    }
+
+    @Test
+    void latest_ignoresItemNotCreatedByAnAgent() {
+        fake.putWithProvenance(LABEL, WorkItemStatus.COMPLETED, Instant.now(), "casehub-lc4j:gate:" + FP, "mallory", "mlro");
+
+        assertThat(port.latest("acme", FP)).isEmpty();
+    }
+
+    @Test
+    void latest_reportsApproverGroups() {
+        fake.putWithProvenance(LABEL, WorkItemStatus.COMPLETED, Instant.now(), "casehub-lc4j:gate:" + FP, "agent:test", "mlro,board");
+
+        assertThat(port.latest("acme", FP).orElseThrow().approverGroups()).containsExactlyInAnyOrder("mlro", "board");
+    }
 }

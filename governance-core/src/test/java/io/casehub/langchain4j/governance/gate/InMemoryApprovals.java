@@ -69,7 +69,7 @@ class InMemoryApprovals implements ApprovalPort {
     }
 
     private static ApprovalRequest view(Stored r) {
-        return new ApprovalRequest(r.id(), r.state(), r.used(), r.createdAt());
+        return new ApprovalRequest(r.id(), r.state(), r.used(), r.createdAt(), r.gate().candidateGroups());
     }
 
     private static void sleep(long millis) {

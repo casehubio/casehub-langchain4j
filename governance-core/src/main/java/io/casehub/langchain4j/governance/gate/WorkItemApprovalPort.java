@@ -7,15 +7,20 @@ import io.casehub.work.api.WorkItemCreateRequest;
 import io.casehub.work.api.WorkItemLabelRequest;
 import io.casehub.work.api.WorkItemStatus;
 import io.casehub.work.api.spi.WorkItemApi;
+import io.casehub.work.api.view.WorkItemPage;
 import io.casehub.work.api.view.WorkItemView;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * {@link ApprovalPort} backed by casehub-work WorkItems. Each request carries the label
@@ -42,10 +47,32 @@ public class WorkItemApprovalPort implements ApprovalPort {
         this.api = Objects.requireNonNull(api, "api required");
     }
 
+    /**
+     * Reads every page (the store returns label matches in no particular order) and keeps only
+     * requests this gate created for this exact call: matching {@code callerRef} and an
+     * {@code agent:} creator. A label alone is not trusted — labels can be added by anyone who can
+     * edit a WorkItem.
+     */
     @Override
     public Optional<ApprovalRequest> latest(String tenancyId, String fingerprint) {
-        List<WorkItemView> items = api.listAll(null, null, LABEL_PREFIX + fingerprint, null, tenancyId, 0, PAGE).items();
-        return items.stream()
+        String label = LABEL_PREFIX + fingerprint;
+        String callerRef = CALLER_REF_PREFIX + fingerprint;
+        List<WorkItemView> genuine = new ArrayList<>();
+        int offset = 0;
+        while (true) {
+            WorkItemPage page = api.listAll(null, null, label, null, tenancyId, offset, PAGE);
+            for (WorkItemView item : page.items()) {
+                if (callerRef.equals(item.callerRef()) && item.createdBy() != null
+                        && item.createdBy().startsWith("agent:")) {
+                    genuine.add(item);
+                }
+            }
+            if (!page.hasMore() || page.items().isEmpty()) {
+                break;
+            }
+            offset += page.items().size();
+        }
+        return genuine.stream()
                 .max(Comparator.comparing(WorkItemView::createdAt, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .map(WorkItemApprovalPort::toRequest);
     }
@@ -75,7 +102,11 @@ public class WorkItemApprovalPort implements ApprovalPort {
     private static ApprovalRequest toRequest(WorkItemView item) {
         boolean used = item.labels() != null
                 && item.labels().stream().anyMatch(label -> USED_LABEL.equals(label.path()));
-        return new ApprovalRequest(item.id(), state(item.status()), used, item.createdAt());
+        Set<String> groups = item.candidateGroups() == null || item.candidateGroups().isBlank()
+                ? Set.of()
+                : Arrays.stream(item.candidateGroups().split(",")).map(String::trim).filter(g -> !g.isEmpty())
+                        .collect(Collectors.toSet());
+        return new ApprovalRequest(item.id(), state(item.status()), used, item.createdAt(), groups);
     }
 
     static ApprovalState state(WorkItemStatus status) {
