@@ -1,27 +1,45 @@
 package io.casehub.langchain4j.governance.quarkus;
 
+import io.casehub.api.spi.ActionRiskClassifier;
+import io.casehub.api.spi.ChainedActionRiskClassifier;
+import io.casehub.api.spi.RiskClassifier;
 import io.casehub.langchain4j.audit.AuditEntryWriter;
+import io.casehub.langchain4j.audit.CasehubAgentListener;
 import io.casehub.langchain4j.governance.GovernanceAgentListener;
 import io.casehub.langchain4j.governance.LedgerTrustPort;
 import io.casehub.langchain4j.governance.TrustPort;
+import io.casehub.langchain4j.governance.gate.ApprovalPort;
+import io.casehub.langchain4j.governance.gate.EngineRiskPort;
+import io.casehub.langchain4j.governance.gate.OversightToolGate;
+import io.casehub.langchain4j.governance.gate.RiskPort;
+import io.casehub.langchain4j.governance.gate.WorkItemApprovalPort;
 import io.casehub.ledger.api.spi.OutcomeRecorder;
 import io.casehub.ledger.api.spi.TrustScoreSource;
 import io.casehub.platform.api.identity.CurrentPrincipal;
+import io.casehub.work.api.spi.WorkItemApi;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
+import java.util.List;
 import java.util.function.Supplier;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 /**
- * Replaces the audit module's default agent listener with {@link GovernanceAgentListener}, so an
- * application gets one listener that records lineage and trust.
+ * Produces the governance beans for Quarkus:
  *
- * <p>Trust is active when {@code TrustScoreSource} and {@code OutcomeRecorder} beans exist;
- * without them the listener records lineage only. Outcomes also need a {@code CurrentPrincipal}
- * bean to supply the tenant.
+ * <ul>
+ *   <li>{@link GovernanceAgentListener} replaces the audit module's default agent listener, so an
+ *       application gets one listener that records lineage and trust. Trust is active when
+ *       {@code TrustScoreSource} and {@code OutcomeRecorder} beans exist; outcomes also need a
+ *       {@code CurrentPrincipal} to supply the tenant.
+ *   <li>{@link OversightToolGate} gates wrapped tool calls with the {@code @RiskClassifier} beans and
+ *       casehub-work approvals.
+ * </ul>
+ *
+ * <p>Every CaseHub bean is <em>injected</em>, never looked up: ArC removes beans no injection point
+ * uses, so a programmatic lookup would miss class-style beans and the module would silently degrade.
  */
 @ApplicationScoped
 public class GovernanceBeans {
@@ -35,7 +53,6 @@ public class GovernanceBeans {
     @Singleton
     public GovernanceAgentListener governanceAgentListener(AuditEntryWriter writer, Instance<TrustScoreSource> source,
             Instance<OutcomeRecorder> recorder, Instance<CurrentPrincipal> principal) {
-        // Injected, not looked up: ArC then keeps class-style beans nothing else injects.
         double confidence = ConfigProvider.getConfig()
                 .getOptionalValue(OUTCOME_CONFIDENCE, Double.class)
                 .orElse(LedgerTrustPort.DEFAULT_CONFIDENCE);
@@ -45,10 +62,37 @@ public class GovernanceBeans {
         TrustPort trust = source.isResolvable() && recorder.isResolvable()
                 ? new LedgerTrustPort(source.get(), recorder.get(), confidence)
                 : null;
-        Supplier<String> tenancy = tenancy(principal);
         LOG.infof("CaseHub governance: agent lineage %s",
                 trust == null ? "only — no trust system available" : "and trust outcomes");
-        return new GovernanceAgentListener(writer, trust, tenancy);
+        return new GovernanceAgentListener(writer, trust, tenancy(principal));
+    }
+
+    /**
+     * The tool oversight gate. Gated calls need {@code @RiskClassifier ActionRiskClassifier} beans,
+     * a {@code WorkItemApi} bean and a {@code CurrentPrincipal}; without classifiers every call runs,
+     * and without the others every call that needs approval is refused.
+     */
+    @Produces
+    @Singleton
+    public OversightToolGate oversightToolGate(AuditEntryWriter writer, CasehubAgentListener lineage,
+            @RiskClassifier Instance<ActionRiskClassifier> classifiers, Instance<WorkItemApi> workItems,
+            Instance<CurrentPrincipal> principal) {
+        List<ActionRiskClassifier> found = classifiers.stream().toList();
+        if (found.isEmpty()) {
+            LOG.warn("CaseHub oversight gate: no @RiskClassifier ActionRiskClassifier beans — wrapped tool calls"
+                    + " run without approval");
+            return new OversightToolGate(null, null, () -> null, writer, lineage);
+        }
+        RiskPort risk = new EngineRiskPort(new ChainedActionRiskClassifier(found));
+        ApprovalPort approvals = workItems.isResolvable() ? new WorkItemApprovalPort(workItems.get()) : null;
+        if (approvals == null) {
+            LOG.warn("CaseHub oversight gate: no casehub-work WorkItemApi bean — tool calls that need approval"
+                    + " are refused");
+        }
+        if (!principal.isResolvable()) {
+            LOG.warn("CaseHub oversight gate: no CurrentPrincipal bean — tool calls that need approval are refused");
+        }
+        return new OversightToolGate(risk, approvals, tenancy(principal), writer, lineage);
     }
 
     private static Supplier<String> tenancy(Instance<CurrentPrincipal> principal) {

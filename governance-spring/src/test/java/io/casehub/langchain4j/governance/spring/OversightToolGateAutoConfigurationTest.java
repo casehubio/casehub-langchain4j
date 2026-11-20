@@ -1,0 +1,136 @@
+package io.casehub.langchain4j.governance.spring;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
+import dev.langchain4j.service.tool.ToolExecutor;
+import io.casehub.api.spi.ActionRiskClassifier;
+import io.casehub.api.spi.ClassificationContext;
+import io.casehub.api.spi.RiskClassifier;
+import io.casehub.api.spi.RiskDecision;
+import io.casehub.api.spi.routing.StaticSetStrategy;
+import io.casehub.langchain4j.audit.spring.AuditAutoConfiguration;
+import io.casehub.langchain4j.governance.gate.AccountTools;
+import io.casehub.langchain4j.governance.gate.FakeWorkItemApi;
+import io.casehub.langchain4j.governance.gate.OversightToolGate;
+import io.casehub.platform.api.identity.CurrentPrincipal;
+import io.casehub.work.api.WorkItemStatus;
+import io.casehub.work.api.spi.WorkItemApi;
+import io.casehub.worker.api.PlannedAction;
+import java.time.Duration;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+class OversightToolGateAutoConfigurationTest {
+
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(AuditAutoConfiguration.class, GovernanceAutoConfiguration.class));
+
+    private static String call(OversightToolGate gate, AccountTools tools, String tool) {
+        Map<ToolSpecification, ToolExecutor> wrapped = gate.forAgent("treasurer").wrap(tools);
+        return wrapped.entrySet().stream().filter(e -> e.getKey().name().equals(tool)).findFirst().orElseThrow()
+                .getValue().execute(ToolExecutionRequest.builder().id("1").name(tool)
+                        .arguments("{\"accountId\":\"A1\"}").build(), "m1");
+    }
+
+    /** Gates account.freeze; carries the qualifier the gate looks for. */
+    @RiskClassifier
+    static class FreezeClassifier implements ActionRiskClassifier {
+        @Override
+        public RiskDecision classify(PlannedAction action, ClassificationContext context) {
+            return action.actionType().equals("account.freeze")
+                    ? new RiskDecision.GateRequired("Account freeze", false, StaticSetStrategy.of("mlro"),
+                            Duration.ofHours(24), null, null, null)
+                    : new RiskDecision.Autonomous();
+        }
+    }
+
+    /** Same rule, without the qualifier (and not inheriting it): must be ignored. */
+    static class UnqualifiedClassifier implements ActionRiskClassifier {
+        @Override
+        public RiskDecision classify(PlannedAction action, ClassificationContext context) {
+            return new FreezeClassifier().classify(action, context);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class ClassifierConfig {
+        @Bean
+        FreezeClassifier freezeClassifier() {
+            return new FreezeClassifier();
+        }
+
+        @Bean
+        CurrentPrincipal currentPrincipal() {
+            CurrentPrincipal principal = mock(CurrentPrincipal.class);
+            when(principal.tenancyId()).thenReturn("acme");
+            return principal;
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class WorkConfig {
+        final FakeWorkItemApi work = new FakeWorkItemApi();
+
+        @Bean
+        WorkItemApi workItemApi() {
+            return work.api;
+        }
+    }
+
+    @Test
+    void noClassifiers_passThrough() {
+        runner.run(context -> {
+            AccountTools tools = new AccountTools();
+            assertThat(call(context.getBean(OversightToolGate.class), tools, "freezeAccount")).isEqualTo("frozen A1");
+        });
+    }
+
+    @Test
+    void classifierWithoutWorkItemApi_refusesGatedCalls_runsAutonomous() {
+        runner.withUserConfiguration(ClassifierConfig.class).run(context -> {
+            OversightToolGate gate = context.getBean(OversightToolGate.class);
+            AccountTools tools = new AccountTools();
+
+            assertThat(call(gate, tools, "freezeAccount")).startsWith("NOT PERFORMED: ");
+            assertThat(call(gate, tools, "balance")).isEqualTo("balance of A1 is 100");
+            assertThat(tools.freezes).hasValue(0);
+        });
+    }
+
+    @Test
+    void classifierAndWorkItemApi_fullGate() {
+        runner.withUserConfiguration(ClassifierConfig.class, WorkConfig.class).run(context -> {
+            OversightToolGate gate = context.getBean(OversightToolGate.class);
+            FakeWorkItemApi work = context.getBean(WorkConfig.class).work;
+            AccountTools tools = new AccountTools();
+
+            assertThat(call(gate, tools, "freezeAccount")).startsWith("NOT PERFORMED: ");
+            work.items.keySet().forEach(id -> work.setStatus(id, WorkItemStatus.COMPLETED));
+            assertThat(call(gate, tools, "freezeAccount")).isEqualTo("frozen A1");
+            assertThat(tools.freezes).hasValue(1);
+        });
+    }
+
+    @Test
+    void unqualifiedClassifierBean_isIgnored() {
+        runner.withBean(UnqualifiedClassifier.class, UnqualifiedClassifier::new).run(context -> {
+            AccountTools tools = new AccountTools();
+            assertThat(call(context.getBean(OversightToolGate.class), tools, "freezeAccount")).isEqualTo("frozen A1");
+        });
+    }
+
+    @Test
+    void userGateBean_wins() {
+        OversightToolGate custom = mock(OversightToolGate.class);
+        runner.withBean("customGate", OversightToolGate.class, () -> custom).run(context ->
+                assertThat(context.getBean(OversightToolGate.class)).isSameAs(custom));
+    }
+}

@@ -40,7 +40,29 @@
             <artifactId>casehub-platform-api</artifactId>
         </dependency>
 
+        <!-- Not optional: the gate injects @RiskClassifier ActionRiskClassifier beans so that ArC keeps
+             them; a programmatic lookup alone lets ArC remove class-style classifier beans. -->
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-engine-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-worker-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-work-api</artifactId>
+        </dependency>
+
         <!-- Test -->
+        <dependency>
+            <groupId>io.casehub.langchain4j</groupId>
+            <artifactId>casehub-langchain4j-governance-core</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.casehub.langchain4j</groupId>
             <artifactId>casehub-langchain4j-audit-core</artifactId>
