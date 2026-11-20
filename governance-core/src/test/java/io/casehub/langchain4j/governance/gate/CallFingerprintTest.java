@@ -52,7 +52,7 @@ class CallFingerprintTest {
     @Test
     void parseArguments_keepsValues() {
         assertThat(CallFingerprint.parseArguments("{\"amount\":49.99,\"provider\":\"Netflix\"}"))
-                .containsExactly(Map.entry("amount", 49.99), Map.entry("provider", "Netflix"));
+                .containsExactly(Map.entry("amount", new java.math.BigDecimal("49.99")), Map.entry("provider", "Netflix"));
     }
 
     @Test
@@ -75,5 +75,26 @@ class CallFingerprintTest {
 
         assertThat(call.arguments()).containsOnlyKeys("a");
         assertThatThrownBy(() -> call.arguments().put("c", 3)).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void parseArguments_duplicateKey_throws() {
+        assertThatThrownBy(() -> CallFingerprint.parseArguments("{\"amount\":999,\"amount\":1}"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void parseArguments_trailingContent_throws() {
+        assertThatThrownBy(() -> CallFingerprint.parseArguments("{\"amount\":1}{\"amount\":999}"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> CallFingerprint.parseArguments("{\"amount\":1} trailing"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void fingerprint_distinguishesLargeAndPreciseNumbers() {
+        assertThat(fp("acme", "t", "{\"a\":12345678901234567890.12}"))
+                .isNotEqualTo(fp("acme", "t", "{\"a\":12345678901234567890.99}"));
+        assertThat(fp("acme", "t", "{\"a\":1e400}")).isNotEqualTo(fp("acme", "t", "{\"a\":1e500}"));
     }
 }
