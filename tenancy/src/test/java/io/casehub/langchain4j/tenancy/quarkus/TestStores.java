@@ -9,6 +9,7 @@ import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.store.memory.chat.InMemoryChatMemoryStore;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
 import java.util.List;
@@ -16,6 +17,17 @@ import java.util.List;
 /** The "application's own" beans that the tenancy module must wrap. */
 @ApplicationScoped
 public class TestStores {
+
+    /**
+     * A bean that declares a store and also injects one — the common shape of an application
+     * class. Creating the tenant wrapper must not recurse through this injection point.
+     */
+    @Inject
+    ChatMemoryStore injectedIntoTheDeclaringBean;
+
+    public ChatMemoryStore injected() {
+        return injectedIntoTheDeclaringBean;
+    }
 
     @Produces
     @Singleton

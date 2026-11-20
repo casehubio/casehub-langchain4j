@@ -23,11 +23,22 @@
     <dependencies>
         <dependency>
             <groupId>io.casehub.langchain4j</groupId>
-            <artifactId>casehub-langchain4j-audit-core</artifactId>
+            <artifactId>casehub-langchain4j-audit</artifactId>
         </dependency>
         <dependency>
-            <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-core</artifactId>
+            <groupId>io.casehub.langchain4j</groupId>
+            <artifactId>casehub-langchain4j-tenancy</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

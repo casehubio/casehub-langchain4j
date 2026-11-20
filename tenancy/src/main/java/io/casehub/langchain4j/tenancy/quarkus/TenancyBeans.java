@@ -21,7 +21,6 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.util.TypeLiteral;
 import jakarta.inject.Inject;
-import jakarta.inject.Singleton;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,8 +30,10 @@ import java.util.List;
  * {@link ContentRetriever} resolve to a tenant-isolating decorator around the application's own
  * bean of that type.
  *
- * <p>Each producer is an alternative, so it wins over the application's bean, and is lazy: an
- * application that never injects the type never triggers it. The application's bean stays
+ * <p>Each producer is an alternative, so it wins over the application's bean. The decorators are
+ * {@code @ApplicationScoped}: injection points receive a client proxy and the decorator is built
+ * on first use. That keeps an application that never uses the type from triggering it, and lets a
+ * class both declare a store and inject one without a creation cycle. The application's bean stays
  * reachable through its own qualifier (for example {@code @Named}).
  *
  * <p>Without a {@link CurrentPrincipal} bean the decorators pass through unchanged.
@@ -51,7 +52,7 @@ public class TenancyBeans {
     @Produces
     @Alternative
     @Priority(100)
-    @Singleton
+    @ApplicationScoped
     public ChatMemoryStore tenantChatMemoryStore(
             @Any Instance<ChatMemoryStore> keepAlive, Instance<CurrentPrincipal> principal) {
         ChatMemoryStore delegate = applicationBean(ChatMemoryStore.class, "ChatMemoryStore");
@@ -61,7 +62,7 @@ public class TenancyBeans {
     @Produces
     @Alternative
     @Priority(100)
-    @Singleton
+    @ApplicationScoped
     public EmbeddingStore<TextSegment> tenantEmbeddingStore(
             @Any Instance<EmbeddingStore<TextSegment>> keepAlive, Instance<CurrentPrincipal> principal) {
         EmbeddingStore<TextSegment> delegate = applicationBean(EMBEDDING_STORE_TYPE, "EmbeddingStore<TextSegment>");
@@ -71,7 +72,7 @@ public class TenancyBeans {
     @Produces
     @Alternative
     @Priority(100)
-    @Singleton
+    @ApplicationScoped
     public ContentRetriever tenantContentRetriever(
             @Any Instance<ContentRetriever> keepAlive, Instance<CurrentPrincipal> principal) {
         ContentRetriever delegate = applicationBean(ContentRetriever.class, "ContentRetriever");
