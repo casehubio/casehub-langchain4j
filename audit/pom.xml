@@ -30,6 +30,24 @@
             <artifactId>casehub-ledger-api</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-platform-api</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- Not optional: AuditBeans produces CasehubAgentListener, whose generated ArC bean
+             loads AgentListener at startup. -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-agentic</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
