@@ -1,0 +1,179 @@
+package io.casehub.langchain4j.audit;
+
+import dev.langchain4j.agentic.observability.AfterAgentToolExecution;
+import dev.langchain4j.agentic.observability.AgentInvocationError;
+import dev.langchain4j.agentic.observability.AgentListener;
+import dev.langchain4j.agentic.observability.AgentRequest;
+import dev.langchain4j.agentic.observability.AgentResponse;
+import dev.langchain4j.agentic.scope.AgenticScope;
+import java.nio.charset.StandardCharsets;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import org.jboss.logging.Logger;
+
+/**
+ * Records the causal lineage of an agent tree: every invocation writes a STARTED entry and a
+ * COMPLETED or FAILED entry, every tool call writes a TOOL_EXECUTED entry, and each entry points
+ * at the entry that caused it.
+ *
+ * <p>Lineage is tracked as a stack of open invocations per {@code memoryId}, held inside this
+ * listener — nothing is written into the {@link AgenticScope} state, which is user-visible and
+ * may be persisted. The stack model assumes invocations sharing one {@code memoryId} nest; agents
+ * running <em>in parallel</em> under the same {@code memoryId} may be chained to a sibling rather
+ * than to their true parent.
+ *
+ * <p>Attach it to an agent (it is inherited by all sub-agents); LangChain4j has no global agent
+ * listener registry. A failing {@link AuditEntryWriter} never breaks the agent invocation.
+ */
+public class CasehubAgentListener implements AgentListener {
+
+    private static final Logger LOG = Logger.getLogger(CasehubAgentListener.class);
+    private static final Object NO_MEMORY_ID = new Object();
+
+    private final AuditEntryWriter writer;
+    private final Map<Object, Deque<Frame>> openInvocations = new ConcurrentHashMap<>();
+
+    /** One open invocation; {@code entryId} is null when its STARTED entry could not be written. */
+    private record Frame(UUID entryId, long startNanos) {}
+
+    public CasehubAgentListener(AuditEntryWriter writer) {
+        this.writer = writer;
+    }
+
+    @Override
+    public void beforeAgentInvocation(AgentRequest request) {
+        Object memoryId = memoryId(request.agenticScope());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("agentName", request.agentName());
+        try {
+            data.putAll(startData(request));
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Audit: startData failed for agent %s", request.agentName());
+        }
+        Deque<Frame> stack = stack(memoryId);
+        UUID entryId = write(new AuditEvent(
+                AuditEvent.AGENT_INVOCATION_STARTED,
+                actorId(request.agentName()),
+                subjectIdFor(memoryId),
+                currentEntryId(stack),
+                data));
+        stack.push(new Frame(entryId, System.nanoTime()));
+    }
+
+    @Override
+    public void afterAgentInvocation(AgentResponse response) {
+        Object memoryId = memoryId(response.agenticScope());
+        Frame frame = stack(memoryId).poll();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("agentName", response.agentName());
+        if (frame != null) {
+            data.put("durationMs", Math.max(0L, (System.nanoTime() - frame.startNanos()) / 1_000_000));
+        }
+        write(new AuditEvent(
+                AuditEvent.AGENT_INVOCATION_COMPLETED,
+                actorId(response.agentName()),
+                subjectIdFor(memoryId),
+                frame == null ? null : frame.entryId(),
+                data));
+    }
+
+    @Override
+    public void onAgentInvocationError(AgentInvocationError error) {
+        recordFailure(error.agentName(), memoryId(error.agenticScope()), error.error());
+    }
+
+    @Override
+    public void afterAgentToolExecution(AfterAgentToolExecution after) {
+        Object memoryId = memoryId(after.agenticScope());
+        String agentName = after.agentInstance() == null ? null : after.agentInstance().name();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("toolName", after.toolExecution().request().name());
+        write(new AuditEvent(
+                AuditEvent.AGENT_TOOL_EXECUTED,
+                actorId(agentName),
+                subjectIdFor(memoryId),
+                currentEntryId(stack(memoryId)),
+                data));
+    }
+
+    @Override
+    public void beforeAgenticScopeDestroyed(AgenticScope agenticScope) {
+        openInvocations.remove(key(memoryId(agenticScope)));
+    }
+
+    @Override
+    public boolean inheritedBySubagents() {
+        return true;
+    }
+
+    /**
+     * Extra payload for the STARTED entry. Subclasses add governance facts here.
+     *
+     * @return entries merged into the STARTED event's data; never {@code null}
+     */
+    protected Map<String, Object> startData(AgentRequest request) {
+        return Map.of();
+    }
+
+    /** The ledger subject for one agent conversation: stable for a given {@code memoryId}. */
+    protected UUID subjectIdFor(Object memoryId) {
+        return UUID.nameUUIDFromBytes(("lc4j-agent:" + memoryId).getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Closes the innermost open invocation for {@code memoryId} with a FAILED entry. Subclasses
+     * call this when they abort an invocation they have already let start.
+     */
+    protected void recordFailure(String agentName, Object memoryId, Throwable error) {
+        Frame frame = stack(memoryId).poll();
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("agentName", agentName);
+        if (error != null) {
+            data.put("errorClass", error.getClass().getName());
+            if (error.getMessage() != null) {
+                data.put("errorMessage", error.getMessage());
+            }
+        }
+        write(new AuditEvent(
+                AuditEvent.AGENT_INVOCATION_FAILED,
+                actorId(agentName),
+                subjectIdFor(memoryId),
+                frame == null ? null : frame.entryId(),
+                data));
+    }
+
+    /** The actor ID used for an agent in audit entries and trust records. */
+    protected static String actorId(String agentName) {
+        return "agent:" + (agentName == null || agentName.isBlank() ? "unknown" : agentName);
+    }
+
+    private UUID write(AuditEvent event) {
+        try {
+            return writer.write(event);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Audit: failed to write %s entry — the agent invocation is unaffected", event.kind());
+            return null;
+        }
+    }
+
+    private Deque<Frame> stack(Object memoryId) {
+        return openInvocations.computeIfAbsent(key(memoryId), k -> new ConcurrentLinkedDeque<>());
+    }
+
+    private static UUID currentEntryId(Deque<Frame> stack) {
+        Frame current = stack.peek();
+        return current == null ? null : current.entryId();
+    }
+
+    private static Object memoryId(AgenticScope scope) {
+        return scope == null ? null : scope.memoryId();
+    }
+
+    private static Object key(Object memoryId) {
+        return memoryId == null ? NO_MEMORY_ID : memoryId;
+    }
+}
