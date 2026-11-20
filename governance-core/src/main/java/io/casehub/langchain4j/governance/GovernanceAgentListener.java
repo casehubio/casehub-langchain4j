@@ -1,11 +1,13 @@
 package io.casehub.langchain4j.governance;
 
+import dev.langchain4j.agentic.observability.AfterAgentToolExecution;
 import dev.langchain4j.agentic.observability.AgentInvocationError;
 import dev.langchain4j.agentic.observability.AgentRequest;
 import dev.langchain4j.agentic.observability.AgentResponse;
 import dev.langchain4j.agentic.scope.AgenticScope;
 import io.casehub.langchain4j.audit.AuditEntryWriter;
 import io.casehub.langchain4j.audit.CasehubAgentListener;
+import io.casehub.langchain4j.governance.gate.OversightToolGate;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalDouble;
@@ -65,6 +67,13 @@ public class GovernanceAgentListener extends CasehubAgentListener {
     public void onAgentInvocationError(AgentInvocationError error) {
         super.onAgentInvocationError(error);
         recordOutcome(error.agentName(), error.agenticScope(), false);
+    }
+
+    /** A call refused by the {@link OversightToolGate} did not run, although LangChain4j reports it. */
+    @Override
+    protected boolean toolPerformed(AfterAgentToolExecution after) {
+        String result = after.toolExecution() == null ? null : after.toolExecution().result();
+        return result == null || !result.startsWith(OversightToolGate.REFUSAL_PREFIX);
     }
 
     private void recordOutcome(String agentName, AgenticScope scope, boolean success) {
