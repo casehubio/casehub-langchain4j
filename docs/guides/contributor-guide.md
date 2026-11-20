@@ -10,7 +10,7 @@
 | `tenancy-core` | `casehub-langchain4j-tenancy-core` | `io.casehub.langchain4j.tenancy` | Pure Java: `TenantIsolatingChatMemoryStore`, `TenantIsolatingEmbeddingStore`, `TenantIsolatingContentRetriever` |
 | `tenancy` | `casehub-langchain4j-tenancy` | `io.casehub.langchain4j.tenancy.quarkus` | CDI bean discovery and wrapping |
 | `tenancy-spring` | `casehub-langchain4j-tenancy-spring` | `io.casehub.langchain4j.tenancy.spring` | Spring `BeanPostProcessor` wrapping |
-| `governance-core` | `casehub-langchain4j-governance-core` | `io.casehub.langchain4j.governance` | Pure Java: `GovernanceAgentListener` (extends `CasehubAgentListener`) → lineage + trust; `TrustPort`, `LedgerTrustPort` |
+| `governance-core` | `casehub-langchain4j-governance-core` | `io.casehub.langchain4j.governance` | Pure Java: `GovernanceAgentListener` (extends `CasehubAgentListener`) → lineage + trust (`TrustPort`, `LedgerTrustPort`); `gate` package: `OversightToolGate`, ports `RiskPort` / `ApprovalPort` with adapters `EngineRiskPort` / `WorkItemApprovalPort` |
 | `governance` | `casehub-langchain4j-governance` | `io.casehub.langchain4j.governance.quarkus` | CDI: registers `GovernanceAgentListener` |
 | `governance-spring` | `casehub-langchain4j-governance-spring` | `io.casehub.langchain4j.governance.spring` | Spring auto-config |
 | `hybrid-search-core` | `casehub-langchain4j-hybrid-search-core` | `io.casehub.langchain4j.hybridsearch` | Pure Java: `CasehubHybridContentRetriever` → neocortex RAG pipeline |

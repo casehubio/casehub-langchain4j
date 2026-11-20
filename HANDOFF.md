@@ -1,6 +1,6 @@
 # Handoff — casehub-langchain4j
 
-**Status:** Phase 1 core implemented (C1–C3, C5 done; C4 lineage + trust done, oversight gate open). See `ARC42STORIES.MD` §9.3 and `docs/superpowers/plans/2026-11-20-phase-1-core-gaps.md`.
+**Status:** Phase 1 core implemented (C1–C5 done; the oversight gate wraps tool calls, Spring approvals pending #15). See `ARC42STORIES.MD` §9.3 and `docs/superpowers/plans/2026-11-20-phase-1-core-gaps.md`.
 **For:** Dmitrii Tikhomirov (treblereel)
 **Date:** 2026-09-25
 
