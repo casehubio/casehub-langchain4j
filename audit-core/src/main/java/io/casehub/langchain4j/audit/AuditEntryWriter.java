@@ -1,15 +1,18 @@
 package io.casehub.langchain4j.audit;
 
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
+import java.util.UUID;
 
 /**
- * SPI for writing audit entries. Implementations delegate to
- * CaseLedgerEntry (when ledger is on classpath) or fall back to logging.
+ * SPI for persisting audit events. Implementations write to the CaseHub ledger
+ * (when it is on the classpath) or fall back to logging.
  */
 public interface AuditEntryWriter {
 
-    void writeCompletion(ChatRequest request, ChatResponse response, long latencyMs);
-
-    void writeError(ChatRequest request, Throwable error);
+    /**
+     * Persists the event.
+     *
+     * @return the ID of the written entry, never {@code null}; later events reference it as
+     *     {@link AuditEvent#causedByEntryId()}
+     */
+    UUID write(AuditEvent event);
 }
