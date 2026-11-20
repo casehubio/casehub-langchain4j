@@ -15,6 +15,7 @@ import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.store.memory.chat.InMemoryChatMemoryStore;
+import io.casehub.langchain4j.tenancy.TenancyWarnings;
 import io.casehub.langchain4j.tenancy.TenantIsolatingChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingContentRetriever;
 import io.casehub.langchain4j.tenancy.TenantIsolatingEmbeddingStore;
@@ -98,6 +99,47 @@ class TenancyAutoConfigurationTest {
                     .extracting(c -> c.textSegment().text())
                     .containsExactly("a's doc");
         });
+    }
+
+    /** Captures records of the tenancy warning logger (JBoss LogManager implements java.util.logging). */
+    private static List<String> warningsDuring(Runnable action) {
+        java.util.logging.Logger logger = java.util.logging.Logger.getLogger(TenancyWarnings.class.getName());
+        List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                messages.add(String.valueOf(record.getMessage()));
+            }
+
+            @Override
+            public void flush() {}
+
+            @Override
+            public void close() {}
+        };
+        logger.addHandler(handler);
+        try {
+            action.run();
+        } finally {
+            logger.removeHandler(handler);
+        }
+        return messages;
+    }
+
+    @Test
+    void noPrincipalBean_warnsThatIsolationIsInactive() {
+        List<String> warnings = warningsDuring(() -> runner.withUserConfiguration(StoreConfig.class)
+                .run(context -> context.getBean(ChatMemoryStore.class)));
+
+        assertThat(warnings).anySatisfy(w -> assertThat(w).contains("no CurrentPrincipal bean").contains("NOT tenant-isolated"));
+    }
+
+    @Test
+    void principalBean_doesNotWarn() {
+        List<String> warnings = warningsDuring(() -> runner.withUserConfiguration(PrincipalConfig.class, StoreConfig.class)
+                .run(context -> context.getBean(ChatMemoryStore.class)));
+
+        assertThat(warnings).noneMatch(w -> w.contains("NOT tenant-isolated"));
     }
 
     @Test

@@ -6,6 +6,7 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingContentRetriever;
+import io.casehub.langchain4j.tenancy.TenancyWarnings;
 import io.casehub.langchain4j.tenancy.TenantIsolatingEmbeddingStore;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import org.springframework.beans.factory.ObjectProvider;
@@ -22,7 +23,8 @@ import org.springframework.context.annotation.Bean;
  * application's own store stays inside the decorator. Consequently a wrapped bean can only be
  * injected by its interface, not by its concrete class.
  *
- * <p>Without a {@link CurrentPrincipal} bean the decorators pass through unchanged.
+ * <p>Without a {@link CurrentPrincipal} bean the decorators pass through unchanged, and a WARN is
+ * logged for every store wrapped that way.
  */
 @AutoConfiguration
 @ConditionalOnClass({CurrentPrincipal.class, ChatMemoryStore.class})
@@ -51,16 +53,24 @@ public class TenancyAutoConfiguration {
                 return bean;
             }
             if (bean instanceof ChatMemoryStore store) {
-                return new TenantIsolatingChatMemoryStore(store, principal.getIfAvailable());
+                return new TenantIsolatingChatMemoryStore(store, principal("ChatMemoryStore " + beanName));
             }
             if (bean instanceof EmbeddingStore<?> store) {
                 return new TenantIsolatingEmbeddingStore(
-                        (EmbeddingStore<TextSegment>) store, principal.getIfAvailable());
+                        (EmbeddingStore<TextSegment>) store, principal("EmbeddingStore " + beanName));
             }
             if (bean instanceof ContentRetriever retriever) {
-                return new TenantIsolatingContentRetriever(retriever, principal.getIfAvailable());
+                return new TenantIsolatingContentRetriever(retriever, principal("ContentRetriever " + beanName));
             }
             return bean;
+        }
+
+        private CurrentPrincipal principal(String wrapped) {
+            CurrentPrincipal current = principal.getIfAvailable();
+            if (current == null) {
+                TenancyWarnings.noPrincipal(wrapped);
+            }
+            return current;
         }
     }
 }
