@@ -19,7 +19,7 @@ Each module group has three variants: `-core` (pure Java), bare name (Quarkus CD
 
 ## Strategy
 
-See [STRATEGY.md](wksp/specs/casehub-langchain4j/STRATEGY.md) for the full positioning rationale.
+See [STRATEGY.md](https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/STRATEGY.md) for the full positioning rationale.
 
 ## Build
 

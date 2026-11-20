@@ -61,7 +61,7 @@ Integration tier uses issue refs directly — no improvement log prefix.
 
 ### Platform
 
-Java 21 (on Java 26 JVM), Quarkus 3.32.2, LangChain4j 1.14.1. Both Quarkus and Spring Boot supported. Published to GitHub Packages as `io.casehub.langchain4j:casehub-langchain4j-*:0.2-SNAPSHOT`.
+Java 21 (on Java 26 JVM), Quarkus 3.39.3, LangChain4j 1.19.0. Both Quarkus and Spring Boot supported. Published to GitHub Packages as `io.casehub.langchain4j:casehub-langchain4j-*:0.2-SNAPSHOT`.
 
 ```bash
 JAVA_HOME=$(/usr/libexec/java_home -v 26) mvn clean install
