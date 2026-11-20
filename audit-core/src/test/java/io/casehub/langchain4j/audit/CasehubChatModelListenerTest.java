@@ -79,18 +79,16 @@ class CasehubChatModelListenerTest {
     }
 
     @Test
-    void onError_writesErrorClassAndMessageOnly() {
+    void onError_writesErrorClassOnly_becauseProviderMessagesCanQuoteTheModelText() {
         listener.onRequest(new ChatModelRequestContext(request, ModelProvider.OTHER, attributes));
         listener.onError(new ChatModelErrorContext(
-                new IllegalStateException("rate limited"), request, ModelProvider.OTHER, attributes));
+                new IllegalStateException("content filter rejected: SECRET"), request, ModelProvider.OTHER, attributes));
 
         AuditEvent event = writer.events.get(0);
         assertThat(event.kind()).isEqualTo("AI_CHAT_ERROR");
-        assertThat(event.data()).containsOnlyKeys("model", "errorClass", "errorMessage");
-        assertThat(event.data())
-                .containsEntry("errorClass", "java.lang.IllegalStateException")
-                .containsEntry("errorMessage", "rate limited");
-        assertThat(event.data().values()).noneMatch(v -> String.valueOf(v).contains("\tat "));
+        assertThat(event.data()).containsOnly(
+                Map.entry("model", "gpt-test"),
+                Map.entry("errorClass", "java.lang.IllegalStateException"));
     }
 
     @Test
@@ -107,7 +105,7 @@ class CasehubChatModelListenerTest {
     void neverRecordsMessageText() {
         complete(new TokenUsage(1, 1));
         listener.onError(new ChatModelErrorContext(
-                new RuntimeException("boom"), request, ModelProvider.OTHER, attributes));
+                new RuntimeException("could not parse: SECRET answer"), request, ModelProvider.OTHER, attributes));
 
         assertThat(writer.events).allSatisfy(event -> {
             assertThat(event.actorId()).doesNotContain("SECRET");
