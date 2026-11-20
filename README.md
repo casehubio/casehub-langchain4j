@@ -13,7 +13,6 @@ enterprise concern that langchain4j deliberately does not handle.
 | **tenancy** | Tenant isolation on any store or retriever | Add dependency |
 | **governance** | Oversight gates, trust routing, causal lineage for agents | Add dependency |
 | **hybrid-search** | SPLADE + dense + RRF hybrid retrieval ([langchain4j#4087](https://github.com/langchain4j/langchain4j/issues/4087)) | Swap one bean |
-| **agents** | ChatModel ↔ AgentProvider bidirectional bridge | — |
 
 Each module group has three variants: `-core` (pure Java), bare name (Quarkus CDI), `-spring` (Spring auto-config).
 
