@@ -12,6 +12,7 @@ import io.casehub.ledger.api.model.CapabilityTag;
 import io.casehub.ledger.api.model.OutcomeRecord;
 import io.casehub.ledger.api.spi.OutcomeRecorder;
 import io.casehub.ledger.api.spi.TrustScoreSource;
+import io.casehub.platform.api.identity.ActorType;
 import java.util.OptionalDouble;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,8 @@ class LedgerTrustPortTest {
         assertThat(record.confidence()).isEqualTo(0.7);
         assertThat(record.capabilityTag()).isEqualTo(CapabilityTag.GLOBAL);
         assertThat(record.occurredAt()).isNotNull();
+        assertThat(record.attestorId()).isEqualTo("system:casehub-langchain4j");
+        assertThat(record.attestorType()).isEqualTo(ActorType.SYSTEM);
     }
 
     @Test

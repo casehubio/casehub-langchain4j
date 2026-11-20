@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -69,6 +70,15 @@ class AuditAutoConfigurationTest {
             assertThat(context).hasSingleBean(CasehubAgentListener.class);
             assertThat(context.getBean(CasehubAgentListener.class)).isInstanceOf(CustomAgentListener.class);
         });
+    }
+
+    @Test
+    void ledgerAndIdentityClassesAbsent_startsWithLoggingWriter() {
+        runner.withClassLoader(new FilteredClassLoader(LedgerAppender.class, CurrentPrincipal.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(AuditEntryWriter.class)).isInstanceOf(LoggingAuditEntryWriter.class);
+                });
     }
 
     @Configuration(proxyBeanMethods = false)

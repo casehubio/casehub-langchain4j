@@ -1,9 +1,11 @@
 package io.casehub.langchain4j.governance;
 
 import io.casehub.ledger.api.model.AttestationVerdict;
+import io.casehub.ledger.api.model.CapabilityTag;
 import io.casehub.ledger.api.model.OutcomeRecord;
 import io.casehub.ledger.api.spi.OutcomeRecorder;
 import io.casehub.ledger.api.spi.TrustScoreSource;
+import io.casehub.platform.api.identity.ActorType;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.OptionalDouble;
@@ -17,6 +19,12 @@ import java.util.UUID;
  * <p>Agents are identified as {@code agent:<name>} — the same actor ID the audit entries use.
  */
 public class LedgerTrustPort implements TrustPort {
+
+    /**
+     * The attestor named on every outcome. Set explicitly so recording does not depend on the
+     * ledger's {@code casehub.ledger.outcome.default-attestor-id} setting.
+     */
+    public static final String ATTESTOR_ID = "system:casehub-langchain4j";
 
     /** Default weight of one agent invocation as trust evidence. */
     public static final double DEFAULT_CONFIDENCE = 0.7;
@@ -44,8 +52,9 @@ public class LedgerTrustPort implements TrustPort {
     public void recordOutcome(String agentName, UUID subjectId, boolean success, String tenancyId) {
         AttestationVerdict verdict = success ? AttestationVerdict.SOUND : AttestationVerdict.FLAGGED;
         recorder.record(
-                OutcomeRecord.ofGlobal(actorId(agentName), subjectId, verdict, confidence)
-                        .withOccurredAt(Instant.now()),
+                new OutcomeRecord(
+                        actorId(agentName), subjectId, verdict, confidence, CapabilityTag.GLOBAL,
+                        ActorType.AGENT, null, Instant.now(), ATTESTOR_ID, ActorType.SYSTEM, null, null),
                 tenancyId);
     }
 
