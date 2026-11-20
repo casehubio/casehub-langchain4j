@@ -33,10 +33,9 @@ logs "to enable the tracing of the AI system's operations." OTel traces
 show that a call happened. They do not prove what the model received and
 returned, and they are not tamper-evident.
 
-**casehub-langchain4j-audit** adds a `ChatModelListener` that produces
-cryptographically signed `CaseLedgerEntry` records for every LLM
-interaction. Merkle Mountain Range inclusion proofs. Ed25519 checkpoint
-signing. The developer adds one dependency. Their existing ChatModel —
+**casehub-langchain4j-audit** adds a `ChatModelListener` that writes a
+record of every LLM interaction to the CaseHub ledger, whose entries are
+tamper-evident. The developer adds one dependency. Their existing ChatModel —
 Ollama, OpenAI, Anthropic, whatever — gains compliance-grade evidence.
 
 ### "Customer A's documents appeared in Customer B's search results."
@@ -66,12 +65,11 @@ financial services, healthcare, and government, certain actions require
 human approval before execution. An agent that autonomously approves
 transactions, disables accounts, or prescribes medication is a liability.
 
-**casehub-langchain4j-governance** implements `AgentListener` to
-intercept agent invocations. Before a sensitive action executes, the
-governance layer checks an oversight gate. If approval is required:
-execution pauses, a `WorkItem` is created for the right approver group,
-and execution resumes only after a human says yes. The LC4j agent code
-does not change.
+*Planned, not yet available.* An approval gate cannot be built as an
+`AgentListener`: LangChain4j catches exceptions thrown by listeners and
+runs the agent anyway. Today **casehub-langchain4j-governance** records the
+causal lineage of every agent invocation and its outcome; the gate needs a
+different mechanism and is open.
 
 ### "We have 12 agents that can handle this task. Which one should we pick?"
 
@@ -80,12 +78,11 @@ no historical data about which agent performs well on which type of task.
 There is no feedback loop from outcomes to routing. Every invocation is
 a fresh guess.
 
-**casehub-langchain4j-governance** adds trust routing: Bayesian Beta
-trust scores evolve from attestation events and outcome history. Agents
-that have historically produced good results for similar tasks get
-selected. Agents whose outputs have been rejected by reviewers get
-deprioritised. The LLM still plans — but its choices are informed by
-evidence.
+**casehub-langchain4j-governance** records the evidence for this: each
+agent's trust score on every invocation, and every outcome (completed or
+failed) as a ledger attestation, so Bayesian trust scores evolve from real
+history. *Using* those scores to pick the next agent is planned, not yet
+available.
 
 ### "Our agent is a ChatModel and a prompt string. It has no identity."
 
@@ -147,18 +144,18 @@ control. These compose with generic resilience — they don't replace it.
 
 Add a dependency. No code changes. Your existing application gains:
 
-- **Audit** — every LLM call produces a tamper-evident ledger entry with
-  Merkle proof inclusion, EU AI Act compliance supplements, token usage,
-  and cost tracking. Implemented via `ChatModelListener` — wraps any
+- **Audit** — every LLM call produces a ledger entry with model, token
+  usage, latency and finish reason; agent invocations produce a causal
+  chain. Implemented via `ChatModelListener` — wraps any
   ChatModel transparently.
 
 - **Tenancy** — your ChatMemoryStore, EmbeddingStore, and ContentRetriever
   become multi-tenant. Decorators scope every operation to the current
   tenant. Works with whatever backing implementation you already chose.
 
-- **Governance** — agent invocations gain causal lineage (who called what
-  and why), oversight gates (human approval before sensitive actions), and
-  trust routing (agents with better track records get selected first).
+- **Governance** — agent invocations gain trust scores and recorded
+  outcomes on top of the causal lineage. Oversight gates and trust-based
+  routing are planned.
 
 - **Hybrid Search** — replace vector-only retrieval with SPLADE sparse +
   dense embeddings + reciprocal rank fusion + cross-encoder reranking.
@@ -271,7 +268,7 @@ Not all modules are equal in weight. The dependency footprint per module:
 | audit | casehub-ledger-api, casehub-platform-api | Light — two API JARs |
 | tenancy | casehub-platform-api | Minimal — one API JAR |
 | resilience | casehub-engine-common-core | Light — engine utilities only |
-| governance | casehub-platform-agent-api, casehub-ledger-api, casehub-engine-api (optional) | Medium — oversight gates need engine |
+| governance | casehub-langchain4j-audit-core, casehub-ledger-api (optional) | Light — trust needs the ledger |
 | eidos | casehub-eidos-api | Medium — identity model |
 | qhorus | casehub-qhorus-api | Medium — channel infrastructure |
 | work (human-in-the-loop) | casehub-work-api | Medium — WorkItem lifecycle |

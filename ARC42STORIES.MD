@@ -133,7 +133,7 @@ C4Context
 
 - **Decorator over replacement** — three of four Phase 1 modules wrap existing LC4j SPI implementations. The developer keeps their chosen providers. CaseHub adds a cross-cutting concern on top.
 - **Classpath activation** — Quarkus: `@DefaultBean`/`@Alternative @Priority`. Spring: `@ConditionalOnClass`. Adding the dependency is the only step.
-- **Graceful degradation** — every module has a fallback chain. Ledger present → crypto audit. Ledger absent → EventLog. Neither → slf4j. Never fails.
+- **Graceful degradation** — every module degrades instead of failing. Ledger present → ledger entries. Ledger absent → log lines.
 - **Three-module pattern** — `*-core` (pure Java bridge), bare name (Quarkus CDI), `*-spring` (Spring auto-config). Established CaseHub convention.
 
 ### Layer taxonomy
@@ -166,7 +166,7 @@ C4Container
   Container_Boundary(p1, "Phase 1: Enterprise Concerns") {
     Container(auditCore, "audit-core", "Java 21", "CasehubChatModelListener + CasehubAgentListener → LedgerEntry")
     Container(tenancyCore, "tenancy-core", "Java 21", "Tenant-isolating decorators for stores/retrievers")
-    Container(govCore, "governance-core", "Java 21", "GovernanceAgentListener → oversight + trust + lineage")
+    Container(govCore, "governance-core", "Java 21", "GovernanceAgentListener → lineage + trust (extends audit listener)")
     Container(hsCore, "hybrid-search-core", "Java 21", "CasehubHybridContentRetriever — SPLADE + dense + RRF")
   }
 
@@ -183,8 +183,7 @@ C4Container
     Container(corpus, "corpus-core", "Java 21", "Enterprise document lifecycle")
   }
 
-  Rel(auditCore, agentsCore, "uses AgentListener from")
-  Rel(govCore, agentsCore, "uses AgentListener from")
+  Rel(govCore, auditCore, "extends CasehubAgentListener")
 ```
 
 ---
@@ -291,10 +290,10 @@ Every module has a fallback chain:
 
 | Module | Full stack | Partial | Minimal |
 |---|---|---|---|
-| audit | Ledger → crypto entries | EventLog → structured entries | slf4j → log lines |
+| audit | Ledger + tenant → ledger entries | — | Log lines |
 | tenancy | CurrentPrincipal → tenant isolation | — | Passthrough (single-tenant) |
-| governance | Engine + Ledger → gates + trust + lineage | Ledger only → lineage | slf4j → log lines |
-| hybrid-search | Neocortex RAG → full pipeline | — | Falls back to LC4j retriever |
+| governance | Ledger trust beans → lineage + trust | — | Lineage only |
+| hybrid-search | Neocortex RAG → full pipeline | — | Clear error on first use (an implementation, not a decorator) |
 
 ### Tenant propagation
 
@@ -470,7 +469,7 @@ Every LLM call and every agent invocation produces a ledger entry (`AuditRecord`
 |---|---|
 | `audit-core/.../CasehubChatModelListener.java` | Implements `ChatModelListener` — onRequest/onResponse/onError → LedgerEntry |
 | `audit-core/.../CasehubAgentListener.java` | Implements `AgentListener` (inheritedBySubagents=true) — agent invocation audit |
-| `audit-core/.../AuditEntryWriter.java` | SPI for writing audit entries — ledger/eventlog/logging implementations |
+| `audit-core/.../AuditEntryWriter.java` | SPI for writing audit entries — ledger (`LedgerAuditEntryWriter`) and logging implementations |
 | `audit/.../AuditBeans.java` | CDI @Produces for listeners with graceful degradation |
 | `audit-spring/.../AuditAutoConfiguration.java` | @ConditionalOnClass auto-configuration |
 
@@ -516,9 +515,9 @@ Delivered via `AgentListener`: causal lineage (shared with audit — `Governance
 
 | File | Purpose |
 |---|---|
-| `governance-core/.../GovernanceAgentListener.java` | Implements AgentListener (inheritedBySubagents=true) — lineage + gate check + trust |
-| `governance-core/.../GovernanceEntryWriter.java` | SPI for governance entries — ledger/logging fallback |
-| `governance/.../GovernanceBeans.java` | CDI: register listener, inject optional gate/trust services |
+| `governance-core/.../GovernanceAgentListener.java` | Extends `CasehubAgentListener` — lineage + trust score + outcomes (no gate) |
+| `governance-core/.../TrustPort.java`, `LedgerTrustPort.java` | Trust port and its ledger adapter |
+| `governance/.../GovernanceBeans.java` | CDI: produce the listener with optional ledger trust beans |
 | `governance-spring/.../GovernanceAutoConfiguration.java` | Spring auto-configuration |
 
 **Issues**
@@ -899,7 +898,7 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | Quality | Scenario | Measure |
 |---|---|---|
 | Zero forced migration | Developer adds `casehub-langchain4j-audit` to existing LC4j app | No code changes required. No configuration. App works. Audit appears. |
-| Graceful degradation | Audit module on classpath but casehub-ledger absent | Falls back to EventLog, then to slf4j. No exception. No startup failure. |
+| Graceful degradation | Audit module on classpath but casehub-ledger absent | Falls back to log lines. No exception. No startup failure. |
 | Classpath isolation | Two CaseHub modules on classpath simultaneously | No CDI ambiguity. No bean conflict. Each module operates independently. |
 | Version compatibility | LangChain4j upgrades from 1.14 to 1.15 | All modules compile and pass tests. |
 | Tenant isolation | Two tenants share the same ChatMemoryStore | Tenant A cannot read Tenant B's messages through the tenancy decorator. |

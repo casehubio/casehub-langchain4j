@@ -31,77 +31,57 @@ All modules use GroupId `io.casehub.langchain4j`.
 
 ### Classpath activation
 
-Every Quarkus module activates by classpath presence. No `quarkus.arc.selected-alternatives` or `application.properties` required.
+Every Quarkus module activates by classpath presence. No `quarkus.arc.selected-alternatives` or
+`application.properties` required.
 
-**Pattern for listener-type modules (audit, governance):**
+### Optional CaseHub types
+
+Never declare an injection point (field, producer parameter) of a type from an optional
+dependency (`LedgerAppender`, `CurrentPrincipal`, `TrustScoreSource`, …): if the jar is absent,
+startup fails. Check presence by class name, then touch the type only inside a nested holder that
+is loaded after the check, and resolve the bean programmatically:
 
 ```java
-@ApplicationScoped
-public class AuditBeans {
+@Produces @DefaultBean @Singleton
+public AuditEntryWriter auditEntryWriter() {
+    AuditEntryWriter logging = new LoggingAuditEntryWriter();
+    if (isPresent("io.casehub.ledger.api.spi.LedgerAppender")
+            && isPresent("io.casehub.platform.api.identity.CurrentPrincipal")) {
+        AuditEntryWriter ledger = LedgerSupport.create(logging);   // nested static class
+        if (ledger != null) return ledger;
+    }
+    return logging;
+}
 
-    @Inject @Any Instance<LedgerEntryWriter> ledgerWriterInstance;
-    @Inject @Any Instance<EventLog> eventLogInstance;
-    @Inject @Any Instance<CurrentPrincipal> principalInstance;
-
-    @Produces @ApplicationScoped
-    public CasehubChatModelListener chatModelListener() {
-        return new CasehubChatModelListener(
-            ledgerWriterInstance.isResolvable() ? ledgerWriterInstance.get() : null,
-            eventLogInstance.isResolvable() ? eventLogInstance.get() : null,
-            principalInstance.isResolvable() ? principalInstance.get() : null
-        );
+private static final class LedgerSupport {
+    static AuditEntryWriter create(AuditEntryWriter fallback) {
+        InstanceHandle<LedgerAppender> appender = Arc.container().instance(LedgerAppender.class);
+        ...
     }
 }
 ```
 
-`Instance<T>.isResolvable()` probes for optional deps. Constructor accepts null for graceful degradation.
+ArC cannot see a programmatic lookup, so list the looked-up types in
+`quarkus.arc.unremovable-types` (the audit module ships them in
+`META-INF/microprofile-config.properties`).
 
-**Pattern for decorator-type modules (tenancy):**
+### Bean roles
 
-```java
-@ApplicationScoped
-public class TenancyBeans {
-
-    @Inject @Any Instance<ChatMemoryStore> storeInstance;
-    @Inject @Any Instance<CurrentPrincipal> principalInstance;
-
-    @Produces @ApplicationScoped
-    public ChatMemoryStore tenantAwareChatMemoryStore() {
-        if (!principalInstance.isResolvable()) {
-            return storeInstance.get(); // passthrough — single-tenant
-        }
-        return new TenantIsolatingChatMemoryStore(
-            storeInstance.get(),
-            principalInstance.get()
-        );
-    }
-}
-```
-
-### Priority tiers
-
-| Tier | Annotation | When selected |
+| Role | Annotation | Example |
 |---|---|---|
-| Default | `@DefaultBean` | No other bean on classpath |
-| Enterprise decorator | `@Alternative @Priority(5)` | CaseHub enrichment active |
-| Test override | `@Alternative @Priority(100)` | Test fixture overrides everything |
+| Replaceable default | `@DefaultBean` | `AuditEntryWriter`, `CasehubAgentListener` from the audit module |
+| Replaces a module default | plain bean | `GovernanceAgentListener` replaces the audit agent listener |
+| Decorator over the app's bean | `@Alternative @Priority(100) @ApplicationScoped` producer | tenancy wrappers; `@ApplicationScoped` so a class can declare and inject a store without a creation cycle |
+| Opt-in implementation | own qualifier (`@HybridSearch`) + `@Named` | hybrid retriever; never an unqualified candidate |
+
+A decorator producer finds the application's bean with `BeanManager.getBeans` — `Instance`
+resolution would only return the decorator itself — and applies ArC's rules (alternatives, then
+non-`@DefaultBean` beans) before giving up as ambiguous.
 
 ### Jandex
 
-Every Quarkus module includes the Jandex plugin in its `pom.xml`:
-
-```xml
-<plugin>
-    <groupId>io.smallrye</groupId>
-    <artifactId>jandex-maven-plugin</artifactId>
-    <executions>
-        <execution>
-            <id>make-index</id>
-            <goals><goal>jandex</goal></goals>
-        </execution>
-    </executions>
-</plugin>
-```
+Every Quarkus module includes the `jandex-maven-plugin` (`make-index` execution) so ArC discovers
+its beans from the jar.
 
 ---
 
@@ -109,80 +89,32 @@ Every Quarkus module includes the Jandex plugin in its `pom.xml`:
 
 ### Auto-configuration
 
-Every Spring module provides a `@Configuration` class annotated with `@ConditionalOnClass` to gate on LC4j types being present:
+Each module provides an `@AutoConfiguration` class, gated with `@ConditionalOnClass` on the
+LangChain4j SPI, and registered in
+`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`.
 
-```java
-@Configuration
-@ConditionalOnClass(ChatModelListener.class)
-public class AuditAutoConfiguration {
+Optional CaseHub types follow the same rule as in Quarkus: check with `ClassUtils.isPresent`, touch
+them only in a nested holder, and resolve beans through `BeanFactory.getBeanProvider(...).getIfAvailable()`.
+Every bean is `@ConditionalOnMissingBean`, so an application bean of the same type wins.
 
-    @Bean
-    @ConditionalOnMissingBean(CasehubChatModelListener.class)
-    public CasehubChatModelListener casehubChatModelListener(
-            @Autowired(required = false) LedgerEntryWriter ledgerWriter,
-            @Autowired(required = false) EventLog eventLog,
-            @Autowired(required = false) CurrentPrincipal principal) {
-        return new CasehubChatModelListener(ledgerWriter, eventLog, principal);
-    }
-}
-```
-
-`@Autowired(required = false)` provides null for graceful degradation — same pattern as CDI `Instance<T>.isResolvable()`.
-
-### META-INF/spring.factories
-
-Each Spring module registers its auto-configuration:
-
-```
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  io.casehub.langchain4j.audit.spring.AuditAutoConfiguration
-```
-
-Or for Spring Boot 3.x+ (spring.factories deprecated):
-
-```
-# META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
-io.casehub.langchain4j.audit.spring.AuditAutoConfiguration
-```
+Decorators are applied by a `static` `BeanPostProcessor` (see `TenancyAutoConfiguration`). An
+opt-in implementation is registered with `@Bean(defaultCandidate = false)`.
 
 ---
 
 ## Test Conventions
 
-### Core modules — unit tests only
-
-```
-*-core/src/test/java/.../*Test.java
-```
-
-- Mock all CaseHub dependencies (LedgerEntryWriter, CurrentPrincipal, etc.)
-- Verify correct method calls on mocks
-- Test graceful degradation paths (null deps)
-- No framework dependency in tests
-
-### Quarkus modules — @QuarkusTest
-
-```
-*/src/test/java/.../*Test.java  (NOT *IT.java)
-```
-
-- `@QuarkusTest` with `TESTCONTAINERS_RYUK_DISABLED=true`
-- Verify classpath activation: bean is resolvable, listener is registered
-- Verify graceful degradation: remove optional dep from test classpath, verify no exception
-
-### Spring modules — @SpringBootTest
-
-```
-*-spring/src/test/java/.../*Test.java
-```
-
-- `@SpringBootTest` with auto-configuration
-- Same verification as Quarkus: classpath activation, graceful degradation
-
-### Test naming
-
-- Test classes: `*Test.java` (never `*IT.java` — surefire, not failsafe)
-- Test methods: `should_<expected>_when_<condition>`
+- **Core modules:** plain JUnit 5 + AssertJ (+ Mockito for CaseHub SPIs). Prefer real LangChain4j
+  objects where they are cheap — the agent lineage is tested against real `AgenticServices` agents
+  (`CasehubAgentListenerRealAgentTest`), which is what exposed the per-invocation leak.
+- **Quarkus modules:** `@QuarkusTest`; optional CaseHub beans are supplied as `@Alternative` test
+  beans enabled by a `QuarkusTestProfile`.
+- **Spring modules:** `ApplicationContextRunner` (not `@SpringBootTest`); use `FilteredClassLoader`
+  to run without the optional CaseHub jars.
+- **Characterisation tests:** `ListenerAbortContractTest` pins that LangChain4j swallows listener
+  exceptions. If it starts failing after an upgrade, revisit the governance design.
+- Test classes are `*Test.java` (surefire). Method names describe behaviour:
+  `failedChild_popsFrame_nextChildChainsToParent`.
 
 ---
 
@@ -192,10 +124,9 @@ io.casehub.langchain4j.audit.spring.AuditAutoConfiguration
 
 | Repo | Module(s) used | Why |
 |---|---|---|
-| casehub-platform | `platform-api` (CurrentPrincipal), `agent-api` (AgentProvider, AgentSession) | Tenancy identity, agent bridge |
-| casehub-ledger | `ledger-api` (CaseLedgerEntry, LedgerEntryWriter, ComplianceSupplement) | Audit trail |
-| casehub-neocortex | `rag-api` (CaseContextRetriever) | Hybrid search |
-| casehub-engine | `engine-api` (OversightGateService, TrustSignalProvider) | Governance (optional) |
+| casehub-platform | `platform-api` (CurrentPrincipal, ActorType) | Tenant identity |
+| casehub-ledger | `ledger-api` (LedgerAppender, AuditRecord, TrustScoreSource, OutcomeRecorder) | Audit trail, trust (optional) |
+| casehub-neocortex | `rag-api` (CaseRetriever, CaseContextRetriever) | Hybrid search |
 | langchain4j | `langchain4j-core`, `langchain4j-agentic` | SPI interfaces |
 
 ### Depended on by (downstream)

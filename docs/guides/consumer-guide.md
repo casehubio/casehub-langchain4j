@@ -68,14 +68,14 @@ static AgentListener listener() {
 **What you get**
 
 - One entry per LLM call: `AI_CHAT_COMPLETION` with model, input/output/total tokens, latency and
-  finish reason, or `AI_CHAT_ERROR` with the error class and message.
+  finish reason, or `AI_CHAT_ERROR` with the error class.
 - For agents, a causal chain: `AGENT_INVOCATION_STARTED` → `AGENT_INVOCATION_COMPLETED` or
   `AGENT_INVOCATION_FAILED`, and `AGENT_TOOL_EXECUTED` for tool calls. Each entry points at the
   entry that caused it; a sub-agent's STARTED entry points at its parent's.
 - Entries are written to the CaseHub ledger (`LedgerAppender`) when a `LedgerAppender` bean and a
   `CurrentPrincipal` bean exist. Otherwise they are logged at INFO. A startup log line says which.
 
-**What is never recorded:** prompt text, completion text, stack traces.
+**What is never recorded:** prompt text, completion text, error messages (provider errors often quote either), stack traces. Errors are recorded by class only.
 
 **Good to know**
 
@@ -83,6 +83,7 @@ static AgentListener listener() {
   the log instead of the ledger.
 - Without a tenant (`CurrentPrincipal.tenancyId()` blank) an entry is logged, not written to the
   ledger — the ledger is never written without a tenant.
+- Lineage state is dropped as soon as no invocation is open, and on suspension.
 - Lineage assumes agents sharing one memory ID nest. Agents running **in parallel** under the same
   memory ID may be chained to a sibling instead of their true parent.
 - Not included: cost estimates (there is no pricing source) and the EU AI Act
@@ -113,9 +114,9 @@ The tenant comes from `CurrentPrincipal.tenancyId()` on every call.
 
 | Situation | Behaviour |
 |---|---|
-| No `CurrentPrincipal` bean at all | Decorators pass through unchanged (module is inert) |
+| No `CurrentPrincipal` bean at all | Decorators pass through unchanged, and a WARN is logged for every wrapped store — this is the one case that does **not** fail closed |
 | Principal present, tenant null or blank | `TenantContextMissingException` — no unscoped access |
-| Tenant contains `::` | `TenantContextMissingException` |
+| Tenant contains `:` | `TenantContextMissingException` (it would make the scoped memory ID ambiguous) |
 | `isCrossTenantAdmin()` is true | No bypass — still scoped to the principal's tenant |
 
 **Limits you should know**
@@ -123,12 +124,18 @@ The tenant comes from `CurrentPrincipal.tenancyId()` on every call.
 - Embeddings added without a `TextSegment` (`add(Embedding)`, `add(String, Embedding)`,
   `addAll(List<Embedding>)`) cannot carry a tenant tag and throw `UnsupportedOperationException`
   while a tenant is active.
-- `remove(String id)` and `removeAll(Collection<String> ids)` are **not** tenant-checked: an
-  embedding ID carries no tenant.
+- `remove(String id)` and `removeAll(Collection<String> ids)` throw while a tenant is active: an
+  embedding ID carries no tenant. Use `removeAll(Filter)`, which is tenant-scoped.
+- `addAll(ids, embeddings, segments)` with IDs you choose is an upsert in most stores: an ID another
+  tenant already used replaces that tenant's entry. On a shared store let the store generate IDs.
+- The delegate `ChatMemoryStore` receives a `String` memory ID (`<tenant>::<memoryId>`), even when
+  your code passes a `Long` or `UUID`.
+- Content stored before the module was added has no tenant tag and becomes invisible once a tenant
+  is active.
 - The delegate store must support metadata filtering.
 - Spring: a wrapped bean can only be injected by its interface, not by its concrete class.
 - Quarkus: the application's own bean stays reachable through its qualifier (for example
-  `@Named`). If several beans of a type could be the unqualified one, the module refuses to guess
+  `@Named`), and injecting it by its concrete class bypasses the decorator. If several beans of a type could be the unqualified one, the module refuses to guess
   and fails on first use — wrap each with its `TenantIsolating*` decorator yourself.
 
 **Artifacts:** `casehub-langchain4j-tenancy` (Quarkus), `casehub-langchain4j-tenancy-spring` (Spring Boot)
@@ -145,7 +152,8 @@ The tenant comes from `CurrentPrincipal.tenancyId()` on every call.
   the invocation completes, `FLAGGED` when it fails. Agents are identified as `agent:<name>`.
 
 Trust is active when `TrustScoreSource` and `OutcomeRecorder` beans exist; otherwise the listener
-records lineage only. Recording an outcome also needs a tenant.
+records lineage only. Recording an outcome also needs a tenant. Outcomes name the attestor
+`system:casehub-langchain4j`, so they do not depend on the ledger's default-attestor setting.
 
 **Not available: an approval gate.** LangChain4j catches every exception thrown by an agent
 listener and runs the agent anyway, so a listener can observe an invocation but cannot stop it.
@@ -187,7 +195,7 @@ supply the tenant. A missing piece is reported on first use, not at startup.
 
 | Property | Default | Description |
 |---|---|---|
-| `casehub.langchain4j.governance.outcome-confidence` | `0.7` | Weight of one agent invocation as trust evidence, in `(0.0, 1.0]`. An invalid value fails startup. |
+| `casehub.langchain4j.governance.outcome-confidence` | `0.7` | Weight of one agent invocation as trust evidence, in `(0.0, 1.0]`. An invalid value fails startup in Spring, and when the listener is first looked up in Quarkus. |
 | `casehub.langchain4j.hybrid-search.corpora` | — (required to use the retriever) | Comma-separated neocortex corpus names |
 | `casehub.langchain4j.hybrid-search.max-results` | `10` | Most contents one retrieval returns |
 
