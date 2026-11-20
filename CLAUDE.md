@@ -19,13 +19,13 @@ LC4j's acknowledged gap #4087).
 
 ## Design Specs
 
-Full design documentation is in the workspace:
-- `wksp/specs/casehub-langchain4j/STRATEGY.md` — positioning and expansion policy
-- `wksp/specs/casehub-langchain4j/decisions.md` — 8 design decisions
-- `wksp/specs/casehub-langchain4j/2026-09-24-casehub-langchain4j-design.md` — architecture overview
-- `wksp/specs/casehub-langchain4j/2026-09-24-phase-1-enterprise-concerns.md` — Phase 1 implementation spec
-- `wksp/specs/casehub-langchain4j/2026-09-24-phase-2-enterprise-implementations.md` — Phase 2 spec
-- `wksp/specs/casehub-langchain4j/2026-09-24-phase-3-application-showcase.md` — Phase 3 spec
+Full design documentation lives in the engine repository:
+- `https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/STRATEGY.md` — positioning and expansion policy
+- `https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/decisions.md` — 8 design decisions
+- `https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/2026-09-24-casehub-langchain4j-design.md` — architecture overview
+- `https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/2026-09-24-phase-1-enterprise-concerns.md` — Phase 1 implementation spec
+- `https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/2026-09-24-phase-2-enterprise-implementations.md` — Phase 2 spec
+- `https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j/2026-09-24-phase-3-application-showcase.md` — Phase 3 spec
 
 ---
 
@@ -50,9 +50,9 @@ mvn clean test                               # full test suite
 mvn clean test -pl audit-core                # single module
 ```
 
-Quarkus version: `3.32.2`
-LangChain4j version: `1.14.1`
-Spring Boot version: `4.1.0`
+Quarkus version: `3.39.3`
+LangChain4j version: `1.19.0` (`langchain4j-agentic` `1.19.0-beta29`)
+Spring Boot version: `4.1.1`
 
 ---
 

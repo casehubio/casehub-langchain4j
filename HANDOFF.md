@@ -37,7 +37,7 @@ positioning. It's written to be shareable with the LC4j team.
 
 ### Specs (in engine workspace)
 Detailed implementation specs are at:
-`~/claude/public/casehub/engine/specs/casehub-langchain4j/`
+https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j
 
 | File | Content |
 |---|---|

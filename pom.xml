@@ -40,7 +40,7 @@
     </modules>
 
     <properties>
-        <version.dev.langchain4j.agentic>1.16.2-beta26</version.dev.langchain4j.agentic>
+        <version.dev.langchain4j.agentic>1.19.0-beta29</version.dev.langchain4j.agentic>
         <version.io.casehub>0.4-SNAPSHOT</version.io.casehub>
         <version.io.casehub.ledger>0.4-SNAPSHOT</version.io.casehub.ledger>
         <maven.deploy.skip>false</maven.deploy.skip>
@@ -117,6 +117,36 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <!-- Test dependencies shared by every module -->
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- casehub-parent's surefire config selects the JBoss LogManager -->
+        <dependency>
+            <groupId>org.jboss.logmanager</groupId>
+            <artifactId>jboss-logmanager</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
   
   <repositories>
