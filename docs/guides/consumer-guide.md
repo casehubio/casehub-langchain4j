@@ -1,27 +1,19 @@
 # Consumer Guide — casehub-langchain4j
 
-Enterprise enrichment for LangChain4j applications. Add CaseHub's audit, tenancy, and governance capabilities to your existing LC4j app — without changing your code.
+Enterprise enrichment for LangChain4j applications. Add CaseHub's audit, tenancy, trust and
+hybrid retrieval to an existing LC4j app without replacing its providers or stores.
+
+This guide describes what each module does today. Where something needs a line of code or does
+not work yet, it says so.
 
 ---
 
 ## Getting Started
 
-Add one dependency. No configuration. No code changes.
+Import the BOM and pick modules. Each group has a Quarkus artifact (bare name) and a Spring Boot
+artifact (`-spring`); the `-core` artifacts are pure Java and come in transitively.
 
 ```xml
-<!-- Quarkus: audit module -->
-<dependency>
-    <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-audit</artifactId>
-</dependency>
-
-<!-- Spring Boot: audit module -->
-<dependency>
-    <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-audit-spring</artifactId>
-</dependency>
-
-<!-- Or import the BOM and pick what you need -->
 <dependencyManagement>
     <dependencies>
         <dependency>
@@ -33,228 +25,212 @@ Add one dependency. No configuration. No code changes.
         </dependency>
     </dependencies>
 </dependencyManagement>
+
+<dependencies>
+    <!-- Quarkus -->
+    <dependency>
+        <groupId>io.casehub.langchain4j</groupId>
+        <artifactId>casehub-langchain4j-audit</artifactId>
+    </dependency>
+    <!-- Spring Boot: casehub-langchain4j-audit-spring -->
+</dependencies>
 ```
 
-Your existing LC4j providers, stores, and patterns continue to work unchanged. CaseHub enrichment activates automatically.
+### What is automatic and what is not
+
+| Module | Automatic on the classpath | Needs one line from you |
+|---|---|---|
+| audit | Audit entry for every LLM call (`ChatModelListener` bean) | Attach `CasehubAgentListener` to your root agent |
+| tenancy | `ChatMemoryStore`, `EmbeddingStore`, `ContentRetriever` beans become tenant-isolated | — |
+| governance | Replaces the audit agent listener with one that also records trust | Attach the listener to your root agent (same line as audit) |
+| hybrid-search | The bean `casehubHybridRetriever` exists | Inject it by name and set the corpora property |
+
+LangChain4j has no global registry for agent listeners, so the agent listener must be attached to
+an agent. It is inherited by all sub-agents, so attach it once, at the root:
+
+```java
+// Plain LangChain4j
+AgenticServices.agentBuilder(MyAgent.class).chatModel(model).listener(casehubAgentListener).build();
+
+// quarkus-langchain4j: a static supplier on the agent interface
+@AgentListenerSupplier
+static AgentListener listener() {
+    return Arc.container().instance(CasehubAgentListener.class).get();
+}
+```
 
 ---
 
 ## Module Reference
 
-### audit — Tamper-evident audit trail
+### audit — audit trail for LLM calls and agents
 
-**What it wraps:** Any `ChatModel` (via `ChatModelListener`) and any LC4j agent (via `AgentListener`)
+**What you get**
 
-**What you get:**
-- Every LLM call → tamper-evident `CaseLedgerEntry` with Merkle proof
-- Every agent invocation → `CaseLedgerEntry` with causal chain (`causedByEntryId`)
-- Token usage, cost estimate, latency, model name per call
-- EU AI Act Art.12 `ComplianceSupplement` on every AI decision
-- Ed25519 tlog-checkpoint signing
+- One entry per LLM call: `AI_CHAT_COMPLETION` with model, input/output/total tokens, latency and
+  finish reason, or `AI_CHAT_ERROR` with the error class and message.
+- For agents, a causal chain: `AGENT_INVOCATION_STARTED` → `AGENT_INVOCATION_COMPLETED` or
+  `AGENT_INVOCATION_FAILED`, and `AGENT_TOOL_EXECUTED` for tool calls. Each entry points at the
+  entry that caused it; a sub-agent's STARTED entry points at its parent's.
+- Entries are written to the CaseHub ledger (`LedgerAppender`) when a `LedgerAppender` bean and a
+  `CurrentPrincipal` bean exist. Otherwise they are logged at INFO. A startup log line says which.
 
-**Developer effort:** Add dependency. Done.
+**What is never recorded:** prompt text, completion text, stack traces.
 
-**Artifacts:**
-- `casehub-langchain4j-audit` (Quarkus)
-- `casehub-langchain4j-audit-spring` (Spring Boot)
+**Good to know**
 
----
+- An audit failure never breaks the LLM or agent call; it is logged at WARN and the entry goes to
+  the log instead of the ledger.
+- Without a tenant (`CurrentPrincipal.tenancyId()` blank) an entry is logged, not written to the
+  ledger — the ledger is never written without a tenant.
+- Lineage assumes agents sharing one memory ID nest. Agents running **in parallel** under the same
+  memory ID may be chained to a sibling instead of their true parent.
+- Not included: cost estimates (there is no pricing source) and the EU AI Act
+  `ComplianceSupplement` (the ledger's append API has no slot for it yet).
+- To write entries somewhere else, define your own `AuditEntryWriter` bean; it replaces the default.
 
-### tenancy — Multi-tenant isolation
+**Artifacts:** `casehub-langchain4j-audit` (Quarkus), `casehub-langchain4j-audit-spring` (Spring Boot)
 
-**What it wraps:** Any `ChatMemoryStore`, `EmbeddingStore`, or `ContentRetriever`
+### tenancy — tenant isolation for stores and retrievers
 
-**What you get:**
-- Tenant-isolated chat memories — Tenant A cannot read Tenant B's messages
-- Tenant-scoped embeddings — search results filtered to current tenant
-- Tenant-scoped retrieval — content retrieval respects tenant boundaries
-- Works with ANY backing implementation (Redis, PostgreSQL, Qdrant, in-memory — whatever you already use)
+**What it wraps:** the application's own `ChatMemoryStore`, `EmbeddingStore<TextSegment>` and
+`ContentRetriever` beans. Your implementation (Redis, PostgreSQL, Qdrant, in-memory) stays inside
+the decorator.
 
-**Developer effort:** Add dependency. Done. Tenant ID is sourced from `CurrentPrincipal.tenancyId()` (casehub-platform-api).
+**What you get**
 
-**Artifacts:**
-- `casehub-langchain4j-tenancy` (Quarkus)
-- `casehub-langchain4j-tenancy-spring` (Spring Boot)
+- `ChatMemoryStore`: the delegate sees the memory ID `<tenant>::<memoryId>`, so two tenants using
+  the same memory ID never share a conversation.
+- `EmbeddingStore`: every stored segment is tagged with the metadata key `casehub_tenant_id`
+  (overwriting any value the caller supplied); every search and every filter-based removal is
+  restricted to the current tenant.
+- `ContentRetriever`: retrieved content not tagged with the current tenant is dropped — including
+  untagged content.
 
----
+The tenant comes from `CurrentPrincipal.tenancyId()` on every call.
 
-### governance — Agent oversight and trust
+**Fails closed**
 
-**What it wraps:** Any LC4j agent pattern (`@SupervisorAgent`, `@SequenceAgent`, `@ParallelAgent`, etc.)
+| Situation | Behaviour |
+|---|---|
+| No `CurrentPrincipal` bean at all | Decorators pass through unchanged (module is inert) |
+| Principal present, tenant null or blank | `TenantContextMissingException` — no unscoped access |
+| Tenant contains `::` | `TenantContextMissingException` |
+| `isCrossTenantAdmin()` is true | No bypass — still scoped to the principal's tenant |
 
-**What you get:**
-- **Causal lineage** — every agent invocation chain is traceable in the ledger
-- **Oversight gates** — sensitive actions pause for human approval before executing
-- **Trust routing** — agents with good outcome history are preferred; agents with rejected outputs are deprioritised
-- **Tool call audit** — every tool execution within an agent is recorded in the lineage
+**Limits you should know**
 
-**Developer effort:** Add dependency. Done. Governance operates at the agent invocation boundary — your LC4j patterns are untouched.
+- Embeddings added without a `TextSegment` (`add(Embedding)`, `add(String, Embedding)`,
+  `addAll(List<Embedding>)`) cannot carry a tenant tag and throw `UnsupportedOperationException`
+  while a tenant is active.
+- `remove(String id)` and `removeAll(Collection<String> ids)` are **not** tenant-checked: an
+  embedding ID carries no tenant.
+- The delegate store must support metadata filtering.
+- Spring: a wrapped bean can only be injected by its interface, not by its concrete class.
+- Quarkus: the application's own bean stays reachable through its qualifier (for example
+  `@Named`). If several beans of a type could be the unqualified one, the module refuses to guess
+  and fails on first use — wrap each with its `TenantIsolating*` decorator yourself.
 
-**Artifacts:**
-- `casehub-langchain4j-governance` (Quarkus)
-- `casehub-langchain4j-governance-spring` (Spring Boot)
+**Artifacts:** `casehub-langchain4j-tenancy` (Quarkus), `casehub-langchain4j-tenancy-spring` (Spring Boot)
 
-**Note:** Oversight gates require casehub-engine on the classpath. Without engine, governance provides lineage only (still valuable for audit).
+### governance — trust on top of the audit lineage
 
----
+**What you get**
 
-### hybrid-search — Enterprise RAG
+- Everything the audit agent listener records — governance replaces that listener rather than
+  running beside it, so there is one lineage.
+- The agent's current trust score on its STARTED entry (`trustScore`), read from the ledger's
+  `TrustScoreSource`.
+- An outcome for every invocation, recorded through the ledger's `OutcomeRecorder`: `SOUND` when
+  the invocation completes, `FLAGGED` when it fails. Agents are identified as `agent:<name>`.
 
-**What it provides:** A `ContentRetriever` implementation with hybrid search
+Trust is active when `TrustScoreSource` and `OutcomeRecorder` beans exist; otherwise the listener
+records lineage only. Recording an outcome also needs a tenant.
 
-**What you get:**
-- SPLADE sparse embeddings (learned term expansion — "prepayment" finds "early closure", "advance payment")
-- Dense vector embeddings (any LC4j `EmbeddingModel`)
-- Reciprocal Rank Fusion (Qdrant server-side)
-- Optional cross-encoder reranking (ONNX, in-process)
-- 26–31% NDCG improvement over dense-only retrieval
+**Not available: an approval gate.** LangChain4j catches every exception thrown by an agent
+listener and runs the agent anyway, so a listener can observe an invocation but cannot stop it.
+This module therefore does not block agents pending human approval, and it does not route between
+agents by trust score — it records the score and the outcome.
 
-**Developer effort:** Swap one bean — replace `EmbeddingStoreContentRetriever` with `CasehubHybridContentRetriever`. This is the only module that replaces rather than decorates — justified by LC4j's acknowledged gap ([#4087](https://github.com/langchain4j/langchain4j/issues/4087)).
+**Artifacts:** `casehub-langchain4j-governance` (Quarkus), `casehub-langchain4j-governance-spring` (Spring Boot)
 
-**Artifacts:**
-- `casehub-langchain4j-hybrid-search` (Quarkus)
-- `casehub-langchain4j-hybrid-search-spring` (Spring Boot)
+### hybrid-search — neocortex hybrid retrieval as a `ContentRetriever`
+
+**What it provides:** a `ContentRetriever` backed by neocortex's pipeline — SPLADE sparse
+embeddings, dense embeddings, Reciprocal Rank Fusion and optional reranking, all configured in
+neocortex. It exists because LangChain4j has acknowledged the gap
+([langchain4j#4087](https://github.com/langchain4j/langchain4j/issues/4087)).
+
+**Opt-in by design.** Hybrid search replaces a retriever, so the bean never competes with your
+own: an unqualified `ContentRetriever` injection is unaffected.
+
+```java
+// Quarkus
+@Inject @HybridSearch ContentRetriever retriever;            // or @Named("casehubHybridRetriever")
+
+// Spring Boot
+@Autowired @Qualifier("casehubHybridRetriever") ContentRetriever retriever;
+```
+
+Each query searches the configured corpora of the **current tenant**. Results carry the relevance
+score (`ContentMetadata.SCORE`) and the segment metadata `source_document_id`, `relevance_grade`
+and `casehub_tenant_id`.
+
+**Needs:** a neocortex `CaseRetriever` bean, the corpora property, and a `CurrentPrincipal` to
+supply the tenant. A missing piece is reported on first use, not at startup.
+
+**Artifacts:** `casehub-langchain4j-hybrid-search` (Quarkus), `casehub-langchain4j-hybrid-search-spring` (Spring Boot)
 
 ---
 
 ## Configuration Reference
 
-All configuration is optional. Modules work with zero configuration.
-
-### audit
-
 | Property | Default | Description |
 |---|---|---|
-| `casehub.langchain4j.audit.cost-tracking.enabled` | `true` | Include cost estimates in ledger entries |
-| `casehub.langchain4j.audit.compliance-supplement.enabled` | `true` | Attach EU AI Act ComplianceSupplement |
+| `casehub.langchain4j.governance.outcome-confidence` | `0.7` | Weight of one agent invocation as trust evidence, in `(0.0, 1.0]`. An invalid value fails startup. |
+| `casehub.langchain4j.hybrid-search.corpora` | — (required to use the retriever) | Comma-separated neocortex corpus names |
+| `casehub.langchain4j.hybrid-search.max-results` | `10` | Most contents one retrieval returns |
 
-### tenancy
+audit and tenancy have no configuration.
 
-| Property | Default | Description |
-|---|---|---|
-| `casehub.langchain4j.tenancy.prefix-separator` | `::` | Separator between tenant ID and memory ID |
-| `casehub.langchain4j.tenancy.metadata-key` | `tenantId` | Metadata key used for tenant tagging on embeddings |
-
-### governance
-
-| Property | Default | Description |
-|---|---|---|
-| `casehub.langchain4j.governance.oversight.timeout` | `PT5M` | Maximum wait time for human approval |
-| `casehub.langchain4j.governance.trust.enabled` | `true` | Enable trust-weighted agent routing |
-| `casehub.langchain4j.governance.lineage.enabled` | `true` | Enable causal lineage recording |
-
-### hybrid-search
-
-| Property | Default | Description |
-|---|---|---|
-| `casehub.langchain4j.hybrid-search.reranking.enabled` | `true` | Enable cross-encoder reranking |
-| `casehub.langchain4j.hybrid-search.reranking.top-n` | `50` | Number of candidates to rerank |
-| `casehub.langchain4j.hybrid-search.splade.threshold` | `0.01` | SPLADE sparsity threshold |
-
-### agents
-
-| Property | Default | Description |
-|---|---|---|
-| `casehub.platform.agent.langchain4j.closeTimeout` | `PT30S` | Session close timeout |
-| `casehub.platform.agent.langchain4j.sessionMemoryWindowSize` | `20` | Chat memory window size for multi-turn sessions |
+Quarkus only: the audit module sets `quarkus.arc.unremovable-types` so the ledger and identity
+beans it looks up are kept. If your application sets that property itself, include
+`io.casehub.ledger.api.spi.LedgerAppender`, `io.casehub.platform.api.identity.CurrentPrincipal`,
+`io.casehub.ledger.api.spi.TrustScoreSource` and `io.casehub.ledger.api.spi.OutcomeRecorder`.
 
 ---
 
 ## Graceful Degradation
 
-Every module handles missing optional dependencies gracefully. Your application never fails because a CaseHub dependency is absent.
+A missing CaseHub dependency never fails startup.
 
-| Module | Full (all deps present) | Reduced (some deps missing) | Passthrough (CaseHub absent) |
-|---|---|---|---|
-| audit | Cryptographic ledger entries | EventLog entries (no crypto) | slf4j logging |
-| tenancy | Tenant-isolated stores | — | Single-tenant passthrough |
-| governance | Lineage + oversight + trust | Lineage only (no engine) | slf4j logging |
-| hybrid-search | Full hybrid pipeline | — | N/A (this is an implementation, not a decorator) |
+| Module | With CaseHub ledger / identity | Without |
+|---|---|---|
+| audit | Ledger entries | Logged at INFO |
+| tenancy | Tenant-isolated stores | Passes through unchanged (no `CurrentPrincipal` bean) |
+| governance | Lineage + trust score + outcomes | Lineage only |
+| hybrid-search | Hybrid retrieval | Clear error on first use — it is an implementation, not a decorator |
 
 ---
 
 ## Combining Modules
 
-Modules are independent and composable. Use any combination:
-
-```xml
-<!-- Audit only -->
-<dependency>
-    <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-audit</artifactId>
-</dependency>
-
-<!-- Audit + Tenancy -->
-<dependency>
-    <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-audit</artifactId>
-</dependency>
-<dependency>
-    <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-tenancy</artifactId>
-</dependency>
-
-<!-- Everything -->
-<dependency>
-    <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-bom</artifactId>
-    <version>${casehub.version}</version>
-    <type>pom</type>
-    <scope>import</scope>
-</dependency>
-```
-
-No ordering constraints. No CDI conflicts between modules. Each module adds its concern independently.
+- **audit + governance:** governance replaces the audit agent listener; attach one listener.
+- **tenancy + hybrid-search:** hybrid results are tagged with the tenant, so the tenancy content
+  filter accepts them.
+- **tenancy + your own retriever:** content your retriever returns must carry `casehub_tenant_id`,
+  or it is dropped. Content stored through a tenant-isolated `EmbeddingStore` already does.
 
 ---
 
 ## Examples
 
-### Audit — add compliance to an existing chatbot
+Runnable, offline examples live in the `examples` module, each with a test:
 
-```java
-// Your existing code — NO CHANGES NEEDED
-@RegisterAiService
-public interface MyAssistant {
-    String chat(@UserMessage String message);
-}
+- `AuditExample` — one chat call produces one `AI_CHAT_COMPLETION` entry.
+- `TenancyExample` — an ordinary `ChatMemoryStore` producer becomes multi-tenant; two tenants use
+  the same conversation ID and never see each other.
 
-// Just add casehub-langchain4j-audit to your pom.xml.
-// Every call to MyAssistant.chat() now produces a
-// tamper-evident CaseLedgerEntry with:
-//   - model name, token count, cost, latency
-//   - EU AI Act ComplianceSupplement
-//   - Merkle inclusion proof
-```
-
-### Tenancy — make any memory store multi-tenant
-
-```java
-// Your existing code — NO CHANGES NEEDED
-@ApplicationScoped
-public class MyMemoryStore implements ChatMemoryStore {
-    // Your Redis/PostgreSQL/whatever implementation
-}
-
-// Just add casehub-langchain4j-tenancy to your pom.xml.
-// Your MyMemoryStore is automatically wrapped with
-// TenantIsolatingChatMemoryStore. Tenant A's messages
-// are invisible to Tenant B. Your implementation code
-// doesn't change.
-```
-
-### Governance — add oversight to a supervisor agent
-
-```java
-// Your existing code — NO CHANGES NEEDED
-@SupervisorAgent(subAgents = {TriageAgent.class, ContainmentAgent.class})
-public interface SecuritySupervisor {
-    String investigate(@UserMessage String alert);
-}
-
-// Just add casehub-langchain4j-governance to your pom.xml.
-// Every agent invocation in the supervisor tree now:
-//   - Creates a tamper-evident lineage entry
-//   - Checks if human approval is required
-//   - Records outcomes for trust scoring
+```bash
+mvn test -pl examples -am
 ```
