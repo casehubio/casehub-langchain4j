@@ -22,7 +22,8 @@ import org.jboss.logging.Logger;
  *
  * <p>Lineage is tracked as a stack of open invocations per {@code memoryId}, held inside this
  * listener — nothing is written into the {@link AgenticScope} state, which is user-visible and
- * may be persisted. The stack model assumes invocations sharing one {@code memoryId} nest; agents
+ * may be persisted. A conversation's entry is dropped as soon as no invocation is open, and on
+ * suspension or scope destruction, so the listener holds no state between invocations. The stack model assumes invocations sharing one {@code memoryId} nest; agents
  * running <em>in parallel</em> under the same {@code memoryId} may be chained to a sibling rather
  * than to their true parent.
  *
@@ -54,20 +55,24 @@ public class CasehubAgentListener implements AgentListener {
         } catch (RuntimeException e) {
             LOG.warnf(e, "Audit: startData failed for agent %s", request.agentName());
         }
-        Deque<Frame> stack = stack(memoryId);
         UUID entryId = write(new AuditEvent(
                 AuditEvent.AGENT_INVOCATION_STARTED,
                 actorId(request.agentName()),
                 subjectIdFor(memoryId),
-                currentEntryId(stack),
+                currentEntryId(memoryId),
                 data));
-        stack.push(new Frame(entryId, System.nanoTime()));
+        Frame frame = new Frame(entryId, System.nanoTime());
+        openInvocations.compute(key(memoryId), (k, stack) -> {
+            Deque<Frame> frames = stack == null ? new ConcurrentLinkedDeque<>() : stack;
+            frames.push(frame);
+            return frames;
+        });
     }
 
     @Override
     public void afterAgentInvocation(AgentResponse response) {
         Object memoryId = memoryId(response.agenticScope());
-        Frame frame = stack(memoryId).poll();
+        Frame frame = pop(memoryId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("agentName", response.agentName());
         if (frame != null) {
@@ -96,8 +101,18 @@ public class CasehubAgentListener implements AgentListener {
                 AuditEvent.AGENT_TOOL_EXECUTED,
                 actorId(agentName),
                 subjectIdFor(memoryId),
-                currentEntryId(stack(memoryId)),
+                currentEntryId(memoryId),
                 data));
+    }
+
+    /**
+     * A suspended invocation (waiting for a human, for example) ends without an after or error
+     * callback. Its open frames are dropped so the resumed or next invocation starts a fresh chain
+     * instead of being parented to a stale entry.
+     */
+    @Override
+    public void onAgenticSystemSuspended(AgenticScope agenticScope) {
+        openInvocations.remove(key(memoryId(agenticScope)));
     }
 
     @Override
@@ -129,14 +144,12 @@ public class CasehubAgentListener implements AgentListener {
      * call this when they abort an invocation they have already let start.
      */
     protected void recordFailure(String agentName, Object memoryId, Throwable error) {
-        Frame frame = stack(memoryId).poll();
+        Frame frame = pop(memoryId);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("agentName", agentName);
         if (error != null) {
+            // The class only: provider and parsing error messages often quote prompt or model text.
             data.put("errorClass", error.getClass().getName());
-            if (error.getMessage() != null) {
-                data.put("errorMessage", error.getMessage());
-            }
         }
         write(new AuditEvent(
                 AuditEvent.AGENT_INVOCATION_FAILED,
@@ -151,6 +164,11 @@ public class CasehubAgentListener implements AgentListener {
         return "agent:" + (agentName == null || agentName.isBlank() ? "unknown" : agentName);
     }
 
+    /** Number of conversations with open invocations; for tests. */
+    int trackedConversations() {
+        return openInvocations.size();
+    }
+
     private UUID write(AuditEvent event) {
         try {
             return writer.write(event);
@@ -160,12 +178,19 @@ public class CasehubAgentListener implements AgentListener {
         }
     }
 
-    private Deque<Frame> stack(Object memoryId) {
-        return openInvocations.computeIfAbsent(key(memoryId), k -> new ConcurrentLinkedDeque<>());
+    /** Pops the innermost open frame; the conversation's entry is dropped once nothing is open. */
+    private Frame pop(Object memoryId) {
+        Frame[] popped = new Frame[1];
+        openInvocations.computeIfPresent(key(memoryId), (k, stack) -> {
+            popped[0] = stack.poll();
+            return stack.isEmpty() ? null : stack;
+        });
+        return popped[0];
     }
 
-    private static UUID currentEntryId(Deque<Frame> stack) {
-        Frame current = stack.peek();
+    private UUID currentEntryId(Object memoryId) {
+        Deque<Frame> stack = openInvocations.get(key(memoryId));
+        Frame current = stack == null ? null : stack.peek();
         return current == null ? null : current.entryId();
     }
 

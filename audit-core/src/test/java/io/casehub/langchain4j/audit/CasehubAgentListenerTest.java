@@ -115,10 +115,8 @@ class CasehubAgentListenerTest {
         AuditEvent failed = writer.events.get(2);
         assertThat(failed.kind()).isEqualTo("AGENT_INVOCATION_FAILED");
         assertThat(failed.causedByEntryId()).isEqualTo(writer.ids.get(1));
-        assertThat(failed.data()).containsOnlyKeys("agentName", "errorClass", "errorMessage");
-        assertThat(failed.data())
-                .containsEntry("errorClass", "java.lang.IllegalStateException")
-                .containsEntry("errorMessage", "boom");
+        assertThat(failed.data()).containsOnlyKeys("agentName", "errorClass");
+        assertThat(failed.data()).containsEntry("errorClass", "java.lang.IllegalStateException");
         assertThat(writer.events.get(3).causedByEntryId()).isEqualTo(writer.ids.get(0));
     }
 
@@ -163,5 +161,21 @@ class CasehubAgentListenerTest {
     @Test
     void inheritedBySubagents_isTrue() {
         assertThat(listener.inheritedBySubagents()).isTrue();
+    }
+
+    @Test
+    void suspendedAgent_clearsItsFrames_soTheNextInvocationIsARoot() {
+        listener.beforeAgentInvocation(request("waits-for-human", scope));
+        listener.onAgenticSystemSuspended(scope);
+        listener.beforeAgentInvocation(request("resumed", scope));
+
+        assertThat(writer.events.get(1).causedByEntryId()).isNull();
+    }
+
+    @Test
+    void toolCallOutsideAnInvocation_doesNotStartTracking() {
+        listener.afterAgentToolExecution(tool("a", "search", scope));
+
+        assertThat(listener.trackedConversations()).isZero();
     }
 }

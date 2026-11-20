@@ -16,8 +16,8 @@ import org.jboss.logging.Logger;
  * Produces one audit event for every LLM call: {@link AuditEvent#AI_CHAT_COMPLETION} on success,
  * {@link AuditEvent#AI_CHAT_ERROR} on failure.
  *
- * <p>Only metadata is recorded — model, token counts, latency, finish reason, error class and
- * message. Prompt and completion text are never recorded.
+ * <p>Only metadata is recorded — model, token counts, latency, finish reason and error class.
+ * Prompt text, completion text and error messages (which often quote either) are never recorded.
  *
  * <p>A failing {@link AuditEntryWriter} never breaks the LLM call: the failure is logged at WARN.
  */
@@ -67,8 +67,8 @@ public class CasehubChatModelListener implements ChatModelListener {
         data.put("model", model);
         Throwable error = ctx.error();
         if (error != null) {
+            // The class only: provider and parsing error messages often quote prompt or model text.
             data.put("errorClass", error.getClass().getName());
-            putIfPresent(data, "errorMessage", error.getMessage());
         }
         write(new AuditEvent(
                 AuditEvent.AI_CHAT_ERROR, actorId(model), subjectId(ctx.attributes()), null, data));
