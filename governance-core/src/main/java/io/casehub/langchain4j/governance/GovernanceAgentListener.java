@@ -1,91 +1,87 @@
 package io.casehub.langchain4j.governance;
 
-import dev.langchain4j.agentic.observability.AfterAgentToolExecution;
 import dev.langchain4j.agentic.observability.AgentInvocationError;
-import dev.langchain4j.agentic.observability.AgentListener;
 import dev.langchain4j.agentic.observability.AgentRequest;
 import dev.langchain4j.agentic.observability.AgentResponse;
-import dev.langchain4j.agentic.observability.BeforeAgentToolExecution;
+import dev.langchain4j.agentic.scope.AgenticScope;
+import io.casehub.langchain4j.audit.AuditEntryWriter;
+import io.casehub.langchain4j.audit.CasehubAgentListener;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.function.Supplier;
 import org.jboss.logging.Logger;
 
 /**
- * Injects three enterprise concerns into LangChain4j agent patterns:
- * <ol>
- *   <li><b>Causal lineage</b> — every agent invocation produces a CaseLedgerEntry
- *       with causedByEntryId chains</li>
- *   <li><b>Oversight gates</b> — sensitive actions pause for human approval
- *       (requires casehub-engine on classpath)</li>
- *   <li><b>Trust routing</b> — trust scores influence agent selection
- *       (requires casehub-engine on classpath)</li>
- * </ol>
- * <p>
- * Inherits to all sub-agents automatically — a single listener covers
- * the entire agent tree (supervisor → sub-agents → tools).
+ * Adds trust to the causal lineage recorded by {@link CasehubAgentListener}:
+ *
+ * <ul>
+ *   <li>the agent's current trust score is recorded on its STARTED entry, and
+ *   <li>every completed or failed invocation is reported to the trust system as an outcome.
+ * </ul>
+ *
+ * <p>It extends the audit listener rather than running beside it, so an application using both
+ * modules gets one lineage, not two.
+ *
+ * <p><b>This listener observes; it cannot veto.</b> LangChain4j catches every exception thrown by
+ * an {@code AgentListener} and runs the agent anyway (see {@code ListenerAbortContractTest}), so
+ * an approval gate cannot be enforced from here.
+ *
+ * <p>A failing {@link TrustPort} never breaks the agent invocation or the lineage.
  */
-public class GovernanceAgentListener implements AgentListener {
+public class GovernanceAgentListener extends CasehubAgentListener {
 
     private static final Logger LOG = Logger.getLogger(GovernanceAgentListener.class);
 
-    private final GovernanceEntryWriter entryWriter;
+    private final TrustPort trust;
+    private final Supplier<String> tenancyId;
 
-    public GovernanceAgentListener(GovernanceEntryWriter entryWriter) {
-        this.entryWriter = entryWriter;
+    /**
+     * @param trustOrNull the trust system, or {@code null} to record lineage only
+     * @param tenancyId supplies the current tenant; outcomes are not recorded without one
+     */
+    public GovernanceAgentListener(AuditEntryWriter writer, TrustPort trustOrNull, Supplier<String> tenancyId) {
+        super(writer);
+        this.trust = trustOrNull;
+        this.tenancyId = Objects.requireNonNull(tenancyId, "tenancyId supplier required");
     }
 
     @Override
-    public void beforeAgentInvocation(AgentRequest agentRequest) {
-        String agentName = agentRequest.agentName();
-        Object memoryId = agentRequest.agenticScope().memoryId();
-
-        // TODO: Create in-progress CaseLedgerEntry with causedByEntryId
-        // TODO: Check OversightGate — if action requires approval, block
-        //       until WorkItem is approved (or timeout)
-        // TODO: Check trust scores — if multiple candidate agents,
-        //       influence selection based on Bayesian Beta scores
-
-        entryWriter.recordInvocationStart(agentName, memoryId);
-        LOG.debugf("Governance: agent invocation starting — agent=%s, memoryId=%s", agentName, memoryId);
+    protected Map<String, Object> startData(AgentRequest request) {
+        if (trust == null) {
+            return Map.of();
+        }
+        OptionalDouble score = trust.score(request.agentName());
+        return score.isPresent() ? Map.of("trustScore", score.getAsDouble()) : Map.of();
     }
 
     @Override
-    public void afterAgentInvocation(AgentResponse agentResponse) {
-        String agentName = agentResponse.agentName();
-        Object memoryId = agentResponse.agenticScope().memoryId();
-
-        // TODO: Complete CaseLedgerEntry
-        // TODO: Update trust score for this agent based on outcome
-
-        entryWriter.recordInvocationComplete(agentName, memoryId);
-        LOG.debugf("Governance: agent invocation complete — agent=%s", agentName);
+    public void afterAgentInvocation(AgentResponse response) {
+        super.afterAgentInvocation(response);
+        recordOutcome(response.agentName(), response.agenticScope(), true);
     }
 
     @Override
     public void onAgentInvocationError(AgentInvocationError error) {
-        String agentName = error.agentName();
-
-        // TODO: Record failure in ledger
-        // TODO: Decrease trust score for this agent
-
-        entryWriter.recordInvocationError(agentName, error.error());
-        LOG.warnf("Governance: agent invocation error — agent=%s, error=%s",
-                agentName, error.error().getMessage());
+        super.onAgentInvocationError(error);
+        recordOutcome(error.agentName(), error.agenticScope(), false);
     }
 
-    @Override
-    public void beforeAgentToolExecution(BeforeAgentToolExecution before) {
-        // TODO: Check OversightGate on tool execution if tool is governance-gated
-        LOG.debugf("Governance: tool execution starting — tool=%s", before.toolExecution().request().name());
-    }
-
-    @Override
-    public void afterAgentToolExecution(AfterAgentToolExecution after) {
-        // TODO: Record tool call in causal lineage
-        entryWriter.recordToolExecution(after.toolExecution().request().name(), after.agenticScope().memoryId());
-        LOG.debugf("Governance: tool execution complete — tool=%s", after.toolExecution().request().name());
-    }
-
-    @Override
-    public boolean inheritedBySubagents() {
-        return true;
+    private void recordOutcome(String agentName, AgenticScope scope, boolean success) {
+        if (trust == null) {
+            return;
+        }
+        try {
+            String tenant = tenancyId.get();
+            if (tenant == null || tenant.isBlank()) {
+                LOG.debugf("Governance: no tenant — trust outcome for agent %s not recorded", agentName);
+                return;
+            }
+            Object memoryId = scope == null ? null : scope.memoryId();
+            trust.recordOutcome(agentName, subjectIdFor(memoryId), success, tenant);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Governance: failed to record trust outcome for agent %s — the invocation is unaffected",
+                    agentName);
+        }
     }
 }
