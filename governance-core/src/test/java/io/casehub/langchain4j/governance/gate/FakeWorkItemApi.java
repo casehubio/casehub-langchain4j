@@ -24,14 +24,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** In-memory stand-in for the few {@link WorkItemApi} calls the gate uses. */
-final class FakeWorkItemApi {
+public final class FakeWorkItemApi {
 
-    final Map<UUID, WorkItemView> items = new ConcurrentHashMap<>();
-    final List<WorkItemCreateRequest> created = new CopyOnWriteArrayList<>();
-    final List<String> listedTenants = new CopyOnWriteArrayList<>();
-    final WorkItemApi api = mock(WorkItemApi.class);
+    public final Map<UUID, WorkItemView> items = new ConcurrentHashMap<>();
+    public final List<WorkItemCreateRequest> created = new CopyOnWriteArrayList<>();
+    public final List<String> listedTenants = new CopyOnWriteArrayList<>();
+    public final WorkItemApi api = mock(WorkItemApi.class);
 
-    FakeWorkItemApi() {
+    public FakeWorkItemApi() {
         when(api.create(any(), any())).thenAnswer(inv -> {
             WorkItemCreateRequest request = inv.getArgument(0);
             created.add(request);
@@ -63,7 +63,7 @@ final class FakeWorkItemApi {
     }
 
     /** Puts an item with the given gate label straight into the store. */
-    WorkItemView put(String label, WorkItemStatus status, Instant createdAt, String... extraLabels) {
+    public WorkItemView put(String label, WorkItemStatus status, Instant createdAt, String... extraLabels) {
         List<WorkItemLabelView> labels = new ArrayList<>();
         labels.add(new WorkItemLabelView(label, LabelPersistence.MANUAL, "test"));
         for (String extra : extraLabels) {
@@ -74,7 +74,7 @@ final class FakeWorkItemApi {
         return view;
     }
 
-    void setStatus(UUID id, WorkItemStatus status) {
+    public void setStatus(UUID id, WorkItemStatus status) {
         WorkItemView old = items.get(id);
         items.put(id, view(id, status, old.labels(), old.createdAt()));
     }

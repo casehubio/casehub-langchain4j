@@ -7,8 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** A gated tool (annotated) and an ungated one, counting real executions. */
 public class AccountTools {
 
-    final AtomicInteger freezes = new AtomicInteger();
-    final AtomicInteger balances = new AtomicInteger();
+    public final AtomicInteger freezes = new AtomicInteger();
+    public final AtomicInteger balances = new AtomicInteger();
     volatile RuntimeException freezeFailure;
 
     @Tool("Freezes an account")
