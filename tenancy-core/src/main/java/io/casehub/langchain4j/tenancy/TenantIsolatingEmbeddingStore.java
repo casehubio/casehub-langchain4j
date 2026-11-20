@@ -26,8 +26,12 @@ import java.util.Optional;
  * <ul>
  *   <li>Embeddings added without a {@link TextSegment} cannot carry a tenant tag, so those
  *       methods throw {@link UnsupportedOperationException} while a tenant is active.
- *   <li>{@link #remove(String)} and {@link #removeAll(Collection)} delegate unchanged: an
- *       embedding ID carries no tenant, so ID-based removal is <em>not</em> tenant-checked.
+ *   <li>{@link #remove(String)} and {@link #removeAll(Collection)} throw while a tenant is
+ *       active: an embedding ID carries no tenant, so the removal could reach another tenant's
+ *       data. Use {@link #removeAll(Filter)}, which is restricted to the current tenant.
+ *   <li>{@link #addAll(List, List, List)} with caller-chosen IDs is an upsert in most stores. An ID
+ *       already used by another tenant replaces that tenant's entry. Let the store generate IDs
+ *       (or use random UUIDs) on a shared store.
  * </ul>
  */
 public class TenantIsolatingEmbeddingStore implements EmbeddingStore<TextSegment> {
@@ -81,11 +85,13 @@ public class TenantIsolatingEmbeddingStore implements EmbeddingStore<TextSegment
 
     @Override
     public void remove(String id) {
+        requireNoTenant("remove(String)", "removeAll(Filter)");
         delegate.remove(id);
     }
 
     @Override
     public void removeAll(Collection<String> ids) {
+        requireNoTenant("removeAll(Collection<String>)", "removeAll(Filter)");
         delegate.removeAll(ids);
     }
 
@@ -122,10 +128,14 @@ public class TenantIsolatingEmbeddingStore implements EmbeddingStore<TextSegment
     }
 
     private void requireNoTenant(String method) {
+        requireNoTenant(method, "add(Embedding, TextSegment) or addAll(List<Embedding>, List<TextSegment>)");
+    }
+
+    private void requireNoTenant(String method, String alternative) {
         if (tenantContext.tenantId().isPresent()) {
             throw new UnsupportedOperationException(method
-                    + " cannot tag the embedding with a tenant — use add(Embedding, TextSegment)"
-                    + " or addAll(List<Embedding>, List<TextSegment>) on a tenant-isolated store");
+                    + " cannot be restricted to the current tenant — use " + alternative
+                    + " on a tenant-isolated store");
         }
     }
 

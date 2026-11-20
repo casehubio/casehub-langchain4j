@@ -7,6 +7,7 @@ import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import dev.langchain4j.store.memory.chat.InMemoryChatMemoryStore;
+import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
@@ -40,6 +41,15 @@ public class TestStores {
     @Singleton
     EmbeddingStore<TextSegment> appEmbeddingStore() {
         return new RecordingEmbeddingStore();
+    }
+
+    /** What an extension would ship: a fallback the application's own retriever must win over. */
+    @Produces
+    @DefaultBean
+    @Singleton
+    ContentRetriever extensionDefaultRetriever() {
+        return query -> List.of(
+                Content.from(TextSegment.from("extension default", Metadata.from("casehub_tenant_id", "a"))));
     }
 
     @Produces

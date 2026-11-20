@@ -9,7 +9,7 @@ import java.util.Optional;
  * <ul>
  *   <li>No {@link CurrentPrincipal} at all (CaseHub identity is not wired in) — empty: the
  *       decorators pass through unchanged.
- *   <li>A principal whose tenant is null, blank, or contains {@value #SEPARATOR} —
+ *   <li>A principal whose tenant is null, blank, or contains {@code ':'} —
  *       {@link TenantContextMissingException}: isolation fails closed.
  *   <li>Otherwise — that tenant. {@code isCrossTenantAdmin()} grants no bypass.
  * </ul>
@@ -38,9 +38,9 @@ public final class TenantContext {
             throw new TenantContextMissingException(
                     "CurrentPrincipal has no tenancyId — refusing unscoped access to a tenant-isolated store");
         }
-        if (tenant.contains(SEPARATOR)) {
-            throw new TenantContextMissingException(
-                    "tenancyId must not contain '" + SEPARATOR + "' — it is the tenant/memory-ID separator");
+        if (tenant.indexOf(':') >= 0) {
+            throw new TenantContextMissingException("tenancyId must not contain ':' — the tenant-scoped memory ID "
+                    + "<tenant>" + SEPARATOR + "<memoryId> would be ambiguous (tenant 'a:' + 'x' equals tenant 'a' + ':x')");
         }
         return Optional.of(tenant);
     }

@@ -6,8 +6,10 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingContentRetriever;
+import io.casehub.langchain4j.tenancy.TenancyWarnings;
 import io.casehub.langchain4j.tenancy.TenantIsolatingEmbeddingStore;
 import io.casehub.platform.api.identity.CurrentPrincipal;
+import io.quarkus.arc.InjectableBean;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;
@@ -34,9 +36,11 @@ import java.util.List;
  * {@code @ApplicationScoped}: injection points receive a client proxy and the decorator is built
  * on first use. That keeps an application that never uses the type from triggering it, and lets a
  * class both declare a store and inject one without a creation cycle. The application's bean stays
- * reachable through its own qualifier (for example {@code @Named}).
+ * reachable through its own qualifier (for example {@code @Named}). Injecting the store by its
+ * concrete class bypasses the decorator.
  *
- * <p>Without a {@link CurrentPrincipal} bean the decorators pass through unchanged.
+ * <p>Without a {@link CurrentPrincipal} bean the decorators pass through unchanged, and a WARN is
+ * logged for every store wrapped that way.
  */
 @ApplicationScoped
 public class TenancyBeans {
@@ -56,7 +60,7 @@ public class TenancyBeans {
     public ChatMemoryStore tenantChatMemoryStore(
             @Any Instance<ChatMemoryStore> keepAlive, Instance<CurrentPrincipal> principal) {
         ChatMemoryStore delegate = applicationBean(ChatMemoryStore.class, "ChatMemoryStore");
-        return new TenantIsolatingChatMemoryStore(delegate, orNull(principal));
+        return new TenantIsolatingChatMemoryStore(delegate, orNull(principal, "ChatMemoryStore"));
     }
 
     @Produces
@@ -66,7 +70,7 @@ public class TenancyBeans {
     public EmbeddingStore<TextSegment> tenantEmbeddingStore(
             @Any Instance<EmbeddingStore<TextSegment>> keepAlive, Instance<CurrentPrincipal> principal) {
         EmbeddingStore<TextSegment> delegate = applicationBean(EMBEDDING_STORE_TYPE, "EmbeddingStore<TextSegment>");
-        return new TenantIsolatingEmbeddingStore(delegate, orNull(principal));
+        return new TenantIsolatingEmbeddingStore(delegate, orNull(principal, "EmbeddingStore"));
     }
 
     @Produces
@@ -76,7 +80,7 @@ public class TenancyBeans {
     public ContentRetriever tenantContentRetriever(
             @Any Instance<ContentRetriever> keepAlive, Instance<CurrentPrincipal> principal) {
         ContentRetriever delegate = applicationBean(ContentRetriever.class, "ContentRetriever");
-        return new TenantIsolatingContentRetriever(delegate, orNull(principal));
+        return new TenantIsolatingContentRetriever(delegate, orNull(principal, "ContentRetriever"));
     }
 
     /**
@@ -93,14 +97,7 @@ public class TenancyBeans {
                 own.add(bean);
             }
         }
-        if (own.size() > 1) {
-            List<Bean<?>> defaults = own.stream()
-                    .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
-                    .toList();
-            if (defaults.size() == 1) {
-                own = defaults;
-            }
-        }
+        own = narrowLikeArc(own);
         if (own.isEmpty()) {
             throw new UnsatisfiedResolutionException("casehub-langchain4j-tenancy found no " + typeName
                     + " bean to isolate — define one, or remove the injection point");
@@ -114,7 +111,38 @@ public class TenancyBeans {
         return (T) beanManager.getReference(bean, type, beanManager.createCreationalContext(bean));
     }
 
-    private static CurrentPrincipal orNull(Instance<CurrentPrincipal> principal) {
-        return principal.isResolvable() ? principal.get() : null;
+    /**
+     * Applies the resolution rules ArC would have applied had this module's alternative not been
+     * there: only {@code @Default} beans are unqualified candidates; enabled alternatives win, the
+     * highest priority first; {@code @DefaultBean}s lose to any other bean.
+     */
+    private static List<Bean<?>> narrowLikeArc(List<Bean<?>> beans) {
+        List<Bean<?>> candidates = beans.stream()
+                .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                .toList();
+        if (candidates.size() <= 1) {
+            return candidates.isEmpty() ? beans : candidates;
+        }
+        List<Bean<?>> alternatives = candidates.stream().filter(Bean::isAlternative).toList();
+        if (!alternatives.isEmpty()) {
+            int top = alternatives.stream().mapToInt(TenancyBeans::priority).max().getAsInt();
+            return alternatives.stream().filter(b -> priority(b) == top).toList();
+        }
+        List<Bean<?>> nonDefaultBeans = candidates.stream()
+                .filter(b -> !(b instanceof InjectableBean<?> injectable && injectable.isDefaultBean()))
+                .toList();
+        return nonDefaultBeans.isEmpty() ? candidates : nonDefaultBeans;
+    }
+
+    private static int priority(Bean<?> bean) {
+        return bean instanceof InjectableBean<?> injectable ? injectable.getPriority() : 0;
+    }
+
+    private static CurrentPrincipal orNull(Instance<CurrentPrincipal> principal, String wrapped) {
+        if (principal.isResolvable()) {
+            return principal.get();
+        }
+        TenancyWarnings.noPrincipal(wrapped);
+        return null;
     }
 }

@@ -89,4 +89,15 @@ class TenantIsolatingChatMemoryStoreTest {
                 .isInstanceOf(TenantContextMissingException.class);
         assertThatThrownBy(() -> store.deleteMessages("m1")).isInstanceOf(TenantContextMissingException.class);
     }
+
+    @Test
+    void colonInMemoryId_cannotReachAnotherTenantsConversation() {
+        principal.tenant = "a";
+        store.updateMessages("x", messages);
+
+        principal.tenant = "a:";
+        assertThatThrownBy(() -> store.getMessages("x")).isInstanceOf(TenantContextMissingException.class);
+        principal.tenant = "a";
+        assertThat(store.getMessages(":x")).isEmpty();
+    }
 }

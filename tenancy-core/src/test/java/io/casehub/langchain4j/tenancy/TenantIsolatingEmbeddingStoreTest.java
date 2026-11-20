@@ -160,4 +160,25 @@ class TenantIsolatingEmbeddingStoreTest {
         assertThatThrownBy(() -> store.search(search().build())).isInstanceOf(TenantContextMissingException.class);
         assertThatThrownBy(() -> store.removeAll()).isInstanceOf(TenantContextMissingException.class);
     }
+
+    @Test
+    void removeById_withActiveTenant_throws_becauseIdsCarryNoTenant() {
+        String id = store.add(embedding, TextSegment.from("doc"));
+
+        assertThatThrownBy(() -> store.remove(id))
+                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("removeAll(Filter)");
+        assertThatThrownBy(() -> store.removeAll(List.of(id)))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(delegate.entries).containsKey(id);
+    }
+
+    @Test
+    void removeById_withoutPrincipal_passesThrough() {
+        TenantIsolatingEmbeddingStore passthrough = new TenantIsolatingEmbeddingStore(delegate, null);
+        String id = passthrough.add(embedding, TextSegment.from("doc"));
+
+        passthrough.removeAll(List.of(id));
+
+        assertThat(delegate.entries).isEmpty();
+    }
 }

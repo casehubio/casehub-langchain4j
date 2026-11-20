@@ -32,8 +32,7 @@ class TenantContextTest {
     @Test
     void tenantContainingSeparator_throws() {
         assertThatThrownBy(() -> new TenantContext(new MutablePrincipal("a::b")).tenantId())
-                .isInstanceOf(TenantContextMissingException.class)
-                .hasMessageContaining("::");
+                .isInstanceOf(TenantContextMissingException.class);
     }
 
     @Test
@@ -50,5 +49,14 @@ class TenantContextTest {
         MutablePrincipal principal = new MutablePrincipal("acme");
         principal.crossTenantAdmin = true;
         assertThat(new TenantContext(principal).tenantId()).contains("acme");
+    }
+
+    @Test
+    void tenantContainingAnyColon_throws_becauseItCouldCollideWithAMemoryId() {
+        for (String tenant : new String[] {"a:", ":a", "a:b"}) {
+            assertThatThrownBy(() -> new TenantContext(new MutablePrincipal(tenant)).tenantId())
+                    .isInstanceOf(TenantContextMissingException.class)
+                    .hasMessageContaining("':'");
+        }
     }
 }
