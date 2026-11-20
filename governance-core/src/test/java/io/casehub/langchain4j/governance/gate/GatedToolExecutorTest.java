@@ -211,12 +211,49 @@ class GatedToolExecutorTest {
     }
 
     @Test
-    void blankTenant_refusesUnchecked() {
+    void blankTenant_gatedCall_refusesUnchecked() {
         tenant.set(" ");
 
-        assertThat(freeze(wrapped())).startsWith("NOT PERFORMED: ");
+        assertThat(freeze(wrapped())).startsWith("NOT PERFORMED: ").contains("no tenant");
         assertThat(tools.freezes).hasValue(0);
-        assertThat(classified).isEmpty();
+        assertThat(approvals.calls).hasValue(0);
+    }
+
+    @Test
+    void blankTenant_autonomousCall_runs() {
+        tenant.set(null);
+
+        assertThat(call(wrapped(), "balance", "{\"accountId\":\"A1\"}")).isEqualTo("balance of A1 is 100");
+        assertThat(classified).singleElement().satisfies(c -> assertThat(c.tenancyId()).isNull());
+    }
+
+    private static dev.langchain4j.invocation.InvocationContext contextWithoutManagedParameters() {
+        dev.langchain4j.invocation.InvocationContext context = mock(dev.langchain4j.invocation.InvocationContext.class);
+        when(context.managedParameters()).thenReturn(null);
+        when(context.chatMemoryId()).thenReturn("m1");
+        return context;
+    }
+
+    private static String callWithContext(Map<ToolSpecification, ToolExecutor> tools, String tool) {
+        ToolExecutor executor = tools.entrySet().stream()
+                .filter(e -> e.getKey().name().equals(tool)).findFirst().orElseThrow().getValue();
+        return executor.executeWithContext(ToolExecutionRequest.builder().id("1").name(tool)
+                .arguments("{\"accountId\":\"A1\"}").build(), contextWithoutManagedParameters()).resultText();
+    }
+
+    @Test
+    void executeWithContext_withoutManagedParameters_autonomousRuns() {
+        assertThat(callWithContext(wrapped(), "balance")).isEqualTo("balance of A1 is 100");
+    }
+
+    @Test
+    void executeWithContext_withoutManagedParameters_approvedCallRuns() {
+        Map<ToolSpecification, ToolExecutor> tools = wrapped();
+        assertThat(callWithContext(tools, "freezeAccount")).startsWith("NOT PERFORMED: ");
+        approvals.decide(approvals.only().id(), ApprovalState.APPROVED);
+
+        assertThat(callWithContext(tools, "freezeAccount")).isEqualTo("frozen A1");
+        assertThat(this.tools.freezes).hasValue(1);
     }
 
     @Test

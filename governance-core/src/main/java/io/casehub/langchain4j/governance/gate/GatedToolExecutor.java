@@ -64,14 +64,14 @@ final class GatedToolExecutor implements ToolExecutor {
     @Override
     public String execute(ToolExecutionRequest request, Object memoryId) {
         Decision decision = decide(request);
-        audit(request, memoryId, decision);
+        audit(request, () -> memoryId, decision);
         return decision.refusal() == null ? delegate.execute(request, memoryId) : decision.refusal();
     }
 
     @Override
     public ToolExecutionResult executeWithContext(ToolExecutionRequest request, InvocationContext context) {
         Decision decision = decide(request);
-        audit(request, memoryId(context), decision);
+        audit(request, () -> memoryId(context), decision);
         if (decision.refusal() == null) {
             return delegate.executeWithContext(request, context);
         }
@@ -87,8 +87,8 @@ final class GatedToolExecutor implements ToolExecutor {
         Map<String, Object> arguments;
         try {
             tenant = tenancyId.get();
-            if (tenant == null || tenant.isBlank()) {
-                return unchecked(tool, "no tenant is known for this call", null);
+            if (tenant != null && tenant.isBlank()) {
+                tenant = null;
             }
             arguments = CallFingerprint.parseArguments(request.arguments());
         } catch (RuntimeException e) {
@@ -112,6 +112,11 @@ final class GatedToolExecutor implements ToolExecutor {
 
     private Decision gated(GatedToolCall call, RiskVerdict.Gate gate) {
         String tool = call.toolName();
+        if (call.tenancyId() == null) {
+            LOG.warnf("Oversight gate: tool %s needs approval but no tenant is known (is a CurrentPrincipal bean"
+                    + " available?) — refused", tool);
+            return unchecked(tool, "it needs approval (" + gate.reason() + ") but no tenant is known", null);
+        }
         if (approvals == null) {
             return unchecked(tool, gate.reason() + " — but no approval service is available", null);
         }
@@ -166,11 +171,12 @@ final class GatedToolExecutor implements ToolExecutor {
                 + reason + ".", "unchecked", requestId, reason);
     }
 
-    private void audit(ToolExecutionRequest request, Object memoryId, Decision decision) {
+    private void audit(ToolExecutionRequest request, Supplier<Object> memoryIdSource, Decision decision) {
         if (decision.auditDecision() == null) {
             return;
         }
         try {
+            Object memoryId = memoryIdSource.get();
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("toolName", request.name());
             data.put("decision", decision.auditDecision());
@@ -194,7 +200,8 @@ final class GatedToolExecutor implements ToolExecutor {
         if (context == null) {
             return null;
         }
-        for (Object managed : context.managedParameters().values()) {
+        Map<?, ?> managedParameters = context.managedParameters();
+        for (Object managed : managedParameters == null ? java.util.List.of() : managedParameters.values()) {
             if (managed instanceof AgenticScope scope) {
                 return scope.memoryId();
             }

@@ -103,6 +103,9 @@ public class GovernanceAutoConfiguration {
         Supplier<String> tenancy = ClassUtils.isPresent(CURRENT_PRINCIPAL, classLoader)
                 ? PrincipalSupport.tenancy(beanFactory)
                 : () -> null;
+        if (!(ClassUtils.isPresent(CURRENT_PRINCIPAL, classLoader) && PrincipalSupport.available(beanFactory))) {
+            LOG.warn("CaseHub oversight gate: no CurrentPrincipal bean — tool calls that need approval are refused");
+        }
         return new OversightToolGate(risk, approvals, tenancy, writer, listener);
     }
 
@@ -141,6 +144,10 @@ public class GovernanceAutoConfiguration {
 
     /** Touches the optional identity type; loaded only when it is present. */
     private static final class PrincipalSupport {
+
+        static boolean available(BeanFactory beanFactory) {
+            return beanFactory.getBeanProvider(CurrentPrincipal.class).getIfAvailable() != null;
+        }
 
         static Supplier<String> tenancy(BeanFactory beanFactory) {
             CurrentPrincipal principal = beanFactory.getBeanProvider(CurrentPrincipal.class).getIfAvailable();
