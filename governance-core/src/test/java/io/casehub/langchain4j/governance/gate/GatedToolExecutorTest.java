@@ -160,6 +160,19 @@ class GatedToolExecutorTest {
     }
 
     @Test
+    void approvedForOtherApproverGroups_createsNewRequest_toolNotRun() {
+        Map<ToolSpecification, ToolExecutor> tools = wrapped();
+        freeze(tools);
+        approvals.decide(approvals.only().id(), ApprovalState.APPROVED);
+        RiskVerdict.Gate stricter = new RiskVerdict.Gate("Account freeze", false, Set.of("board"), Duration.ofHours(24), "aml");
+        risk = call -> stricter;
+
+        assertThat(freeze(tools)).startsWith("NOT PERFORMED: ");
+        assertThat(this.tools.freezes).hasValue(0);
+        assertThat(approvals.all()).hasSize(2);
+    }
+
+    @Test
     void approvedOnce_secondIdenticalCall_createsNewRequest() {
         Map<ToolSpecification, ToolExecutor> tools = wrapped();
         freeze(tools);

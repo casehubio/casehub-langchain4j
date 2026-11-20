@@ -141,7 +141,8 @@ final class GatedToolExecutor implements ToolExecutor {
                                             + ". Do not retry it.", "rejected", request.id(), gate.reason());
                         }
                         case APPROVED -> {
-                            if (!request.used()) {
+                            // An approval only counts for the approvers the current rule names.
+                            if (!request.used() && request.approverGroups().equals(gate.candidateGroups())) {
                                 approvals.markUsed(request, call.tenancyId());
                                 return Decision.runApproved(request.id(), gate.reason());
                             }
