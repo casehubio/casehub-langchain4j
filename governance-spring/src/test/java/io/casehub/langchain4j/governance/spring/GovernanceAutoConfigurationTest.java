@@ -22,6 +22,7 @@ import java.util.OptionalDouble;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -98,6 +99,16 @@ class GovernanceAutoConfigurationTest {
         GovernanceAgentListener custom = new GovernanceAgentListener(event -> null, null, () -> null);
         runner.withBean("custom", GovernanceAgentListener.class, () -> custom).run(context ->
                 assertThat(context.getBean(CasehubAgentListener.class)).isSameAs(custom));
+    }
+
+ 
+    @Test
+    void ledgerAndIdentityClassesAbsent_startsWithLineageOnly() {
+        runner.withClassLoader(new FilteredClassLoader(TrustScoreSource.class, CurrentPrincipal.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    invoke(context.getBean(CasehubAgentListener.class));
+                });
     }
 
     @Configuration(proxyBeanMethods = false)
