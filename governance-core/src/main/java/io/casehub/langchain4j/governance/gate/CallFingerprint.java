@@ -1,10 +1,14 @@
 package io.casehub.langchain4j.governance.gate;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -18,8 +22,18 @@ import java.util.Map;
  */
 public final class CallFingerprint {
 
-    private static final ObjectMapper MAPPER =
-            new ObjectMapper().configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+    /**
+     * Strict on purpose: duplicate keys and trailing content are refused, and numbers keep their
+     * exact value, so the arguments the gate approves are exactly the arguments the tool receives —
+     * even when a wrapped executor forwards the raw JSON to another parser.
+     */
+    private static final ObjectMapper MAPPER = JsonMapper.builder()
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .enable(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES)
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build();
     private static final TypeReference<LinkedHashMap<String, Object>> MAP = new TypeReference<>() {};
 
     private CallFingerprint() {}
