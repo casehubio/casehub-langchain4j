@@ -24,7 +24,7 @@ Four phases, each telling a clear story to an LC4j developer:
 
 **Strategic positioning:** This work is designed for complementary engagement with the LC4j community. Phase 1+2 demonstrate value that doesn't threaten LC4j's core. The conversation opens with "here's what we built on top of your framework." Phase 4 is where natural migration happens — the developer has seen enough value that they want the full stack.
 
-Module structure per SPI: `-core` (pure Java), bare name (Quarkus CDI), `-spring` (Spring auto-config). The agents bridge (ChatModel ↔ AgentProvider, moved from platform) is the foundation all modules build on.
+Module structure per SPI: `-core` (pure Java), bare name (Quarkus CDI), `-spring` (Spring auto-config). The ChatModel ↔ AgentProvider bridge once planned for this repo was retired in platform#638; consumers call `AgentProvider` directly.
 
 ### Artifact Schema
 
@@ -143,12 +143,11 @@ C4Context
 | L1: Bridge Core | `*-core` modules | Pure Java SPI bridges and decorators — no framework deps |
 | L2: Quarkus Integration | bare-name modules | CDI `@DefaultBean`/`@Alternative @Priority` wiring |
 | L3: Spring Integration | `*-spring` modules | Spring `@ConditionalOnClass` auto-configuration |
-| L4: Agents Bridge | `agents-core`, `agents`, `agents-spring` | ChatModel ↔ AgentProvider bidirectional bridge (moved from platform) |
 | L5: Examples & Guides | `examples/`, `docs/` | Working demonstrations, capability guides, reference architectures |
 
 ### Journey and Chapter sequencing rationale
 
-- C1 before all: scaffold establishes the repo, agents bridge, CI pipeline
+- C1 before all: scaffold establishes the repo and CI pipeline
 - C2–C5 can proceed in parallel: audit, tenancy, governance, hybrid-search are independent modules
 - C6–C9 after C1: resilience, concurrency, CRAG, tracking extend Phase 1 with engine/neocortex capabilities
 - C10–C18 after C5: Phase 2 capabilities build on the Phase 1 bridge layer being complete
@@ -163,12 +162,6 @@ C4Context
 ```mermaid
 C4Container
   title casehub-langchain4j — Module Architecture
-
-  Container_Boundary(l4, "L4: Agents Bridge (from platform)") {
-    Container(agentsCore, "agents-core", "Java 21", "ChatModel ↔ AgentProvider bridge — pure Java")
-    Container(agents, "agents", "Quarkus", "CDI wiring for bridge beans")
-    Container(agentsSpring, "agents-spring", "Spring", "Auto-configuration for bridge beans")
-  }
 
   Container_Boundary(p1, "Phase 1: Enterprise Concerns") {
     Container(auditCore, "audit-core", "Java 21", "CasehubChatModelListener + CasehubAgentListener → LedgerEntry")
@@ -319,7 +312,7 @@ Any module beyond Phase 1 requires documented justification in its README:
 
 | Journey | Phase | Description | Chapters | Status |
 |---|---|---|---|---|
-| J1: Foundation | — | Scaffold, agents bridge, CI, BOM, workspace, docs | C1 | 🔲 |
+| J1: Foundation | — | Scaffold, CI, BOM, workspace, docs | C1 | 🔲 |
 | J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🔲 |
 | J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, agency attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
 | J4: Enterprise Infrastructure | 3 | CBR memory, SPLADE embedding, corpus ingestion, temporal scoring | C19–C22 | 🔲 |
@@ -329,7 +322,7 @@ Any module beyond Phase 1 requires documented justification in its README:
 
 ```mermaid
 flowchart LR
-  C1["C1: Scaffold\nL1+L2+L3+L4"]
+  C1["C1: Scaffold\nL1+L2+L3"]
 
   C1 --> C2["C2: Audit\nL1+L2+L3"]
   C1 --> C3["C3: Tenancy\nL1+L2+L3"]
@@ -400,7 +393,7 @@ flowchart LR
 
 | # | Chapter | Journey | Phase | Layers | Status |
 |---|---|---|---|---|---|
-| 1 | Scaffold + Agents Bridge | J1 | — | L1, L2, L3, L4 | 🔲 |
+| 1 | Scaffold | J1 | — | L1, L2, L3 | 🔲 |
 | 2 | Audit — Ledger + Compliance | J2 | 1 | L1, L2, L3 | 🔲 |
 | 3 | Tenancy — Tenant Isolation Decorators | J2 | 1 | L1, L2, L3 | 🔲 |
 | 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | 🔲 |
@@ -435,21 +428,18 @@ flowchart LR
 
 ---
 
-#### C1 — Scaffold + Agents Bridge
+#### C1 — Scaffold
 
 **Journey:** J1 | **Sequence:** 1 of 30 | **Status:** 🔲
 
 **What this delivers**
-The repo exists with Maven multi-module structure, CI pipeline, BOM, workspace, and the agents bridge moved from platform. IntelliJ can open the project. `mvn install` passes. The agents bridge (ChatModel ↔ AgentProvider) provides the foundation all subsequent modules build on.
+The repo exists with Maven multi-module structure, CI pipeline, BOM and workspace. IntelliJ can open the project. `mvn install` passes. The ChatModel ↔ AgentProvider bridge originally planned here was retired in platform#638 and its empty `agents*` modules were removed.
 
 **Key files**
 
 | File | Purpose |
 |---|---|
 | `pom.xml` | Root POM — parent, modules, dependency management |
-| `agents-core/` | Pure Java: ChatModelAgentProvider, AgentProviderChatModel, ChatModelAgentSession, AgentSessionChatModel, AgentEventBridge |
-| `agents/` | Quarkus CDI: Langchain4jBeans, AgentLangchain4jConfig |
-| `agents-spring/` | Spring auto-configuration |
 | `bom/pom.xml` | BOM importing all published modules |
 | `.github/workflows/publish.yml` | CI: build on PR, deploy on push, dispatch downstream |
 | `CLAUDE.md` | Project type java, work tracking enabled |
@@ -458,10 +448,7 @@ The repo exists with Maven multi-module structure, CI pipeline, BOM, workspace, 
 
 **Issues**
 - TBD — scaffold repo and Maven structure
-- TBD — move agents-core from platform
-- TBD — move agents from platform (Quarkus CDI)
-- TBD — move agents-spring from platform
-- TBD — update engine/agency dependencies to new coordinates
+- #5 — remove agents bridge modules (retired in platform#638)
 - TBD — CI workflow and parent BOM registration
 
 ---
@@ -907,7 +894,7 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | D4 | Both Quarkus and Spring from day one | Platform has the dual-framework pattern proven. |
 | D5 | Decorators over replacements | CaseHub is additive, not competitive. Wraps, never replaces. |
 | D6 | Four lead modules (audit, tenancy, governance, hybrid-search) | All in the "safe" column per community research. |
-| D7 | Move platform/agent-langchain4j here | Consolidates all LC4j interop. |
+| D7 | ~~Move platform/agent-langchain4j here~~ — superseded | The bridge was retired in platform#638; consumers use `AgentProvider` directly. |
 | D8 | Future modules require documented justification | Gap acknowledged, different category, or customer requested. |
 
 ---
@@ -933,7 +920,6 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | CDI bean priority conflicts | Multiple casehub-langchain4j modules + quarkus-langchain4j modules | Documented priority tier system. Integration tests with realistic deployments. |
 | AgentListener API instability | `langchain4j-agentic` is newer than `langchain4j-core` | Monitor LC4j releases. Interface adapter for loose coupling. |
 | Scope creep | Pressure to add modules competing with LC4j | Expansion policy (D8) requires documented justification. STRATEGY.md is the public commitment. |
-| Platform module migration | Moving agent-langchain4j from platform | Deprecate old coordinates before removing. Coordinate with downstream consumers. |
 | Phase 2 dependency breadth | Phase 2 modules depend on eidos, qhorus, work, agency, ledger | Each Phase 2 module is optional and independent. Adding one doesn't force all. |
 
 ---
@@ -945,7 +931,6 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | Decorator | A module that wraps an existing LC4j SPI implementation to add a cross-cutting concern without replacing the implementation |
 | Graceful degradation | A module's ability to function at reduced capability when optional CaseHub dependencies are absent |
 | Classpath activation | Enterprise enrichment activated solely by adding a dependency — no code or config changes |
-| Agents bridge | The bidirectional ChatModel ↔ AgentProvider adapter, moved from platform |
 | Complementary positioning | The principle that casehub-langchain4j adds concerns LC4j doesn't handle, rather than competing |
 | Expansion policy | The requirement that modules beyond Phase 1 document why they exist |
 | SPLADE | Sparse Lexical and Expansion Model — learned sparse embeddings |

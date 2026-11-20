@@ -117,23 +117,6 @@ Your existing LC4j providers, stores, and patterns continue to work unchanged. C
 
 ---
 
-### agents — ChatModel ↔ AgentProvider bridge
-
-**What it provides:** Bidirectional bridge between LC4j's ChatModel and CaseHub's AgentProvider
-
-**What you get:**
-- Any LC4j `ChatModel` works as a CaseHub `AgentProvider`
-- Any CaseHub `AgentProvider` works as a LC4j `ChatModel`
-- Session management, timeout enforcement, concurrent query protection
-
-**Developer effort:** Add dependency. The bridge activates automatically based on what's on the classpath.
-
-**Artifacts:**
-- `casehub-langchain4j-agents` (Quarkus)
-- `casehub-langchain4j-agents-spring` (Spring Boot)
-
----
-
 ## Configuration Reference
 
 All configuration is optional. Modules work with zero configuration.

@@ -64,7 +64,6 @@ Spring Boot version: `4.1.1`
 | tenancy | tenancy-core | tenancy | tenancy-spring |
 | governance | governance-core | governance | governance-spring |
 | hybrid-search | hybrid-search-core | hybrid-search | hybrid-search-spring |
-| agents | agents-core | agents | agents-spring |
 
 Plus: `bom` (BOM), `examples` (not published).
 

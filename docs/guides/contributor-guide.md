@@ -16,9 +16,6 @@
 | `hybrid-search-core` | `casehub-langchain4j-hybrid-search-core` | `io.casehub.langchain4j.hybridsearch` | Pure Java: `CasehubHybridContentRetriever` → neocortex RAG pipeline |
 | `hybrid-search` | `casehub-langchain4j-hybrid-search` | `io.casehub.langchain4j.hybridsearch.quarkus` | CDI: registers `ContentRetriever` |
 | `hybrid-search-spring` | `casehub-langchain4j-hybrid-search-spring` | `io.casehub.langchain4j.hybridsearch.spring` | Spring auto-config |
-| `agents-core` | `casehub-langchain4j-agents-core` | `io.casehub.platform.agent.langchain4j` | Pure Java: `ChatModelAgentProvider`, `AgentProviderChatModel`, `ChatModelAgentSession`, `AgentSessionChatModel`, `AgentEventBridge` (moved from platform) |
-| `agents` | `casehub-langchain4j-agents` | `io.casehub.platform.agent.langchain4j.quarkus` | CDI: `Langchain4jBeans`, `AgentLangchain4jConfig` (moved from platform) |
-| `agents-spring` | `casehub-langchain4j-agents-spring` | `io.casehub.platform.agent.langchain4j.spring` | Spring auto-config (moved from platform) |
 | `bom` | `casehub-langchain4j-bom` | — | Maven BOM importing all published modules |
 | `examples` | `casehub-langchain4j-examples` | `io.casehub.langchain4j.examples` | Working demos. Not published (`maven.deploy.skip=true`). |
 

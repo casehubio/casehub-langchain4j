@@ -53,12 +53,9 @@ https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j
 
 ### Must do before implementation starts
 
-1. **Move agent-langchain4j from platform** — the `agents-core/`,
-   `agents/`, `agents-spring/` modules are empty stubs. The actual code
-   lives in `platform/agent-langchain4j-core`,
-   `platform/agent-langchain4j`, `platform/agent-langchain4j-spring`.
-   Move the source code, update artifact coordinates, update consumers
-   (engine, blocks, etc.).
+1. ~~Move agent-langchain4j from platform~~ — **retired.** The ChatModel ↔ AgentProvider
+   bridge was removed from platform (casehubio/platform#638); consumers call
+   `AgentProvider` directly. The empty `agents*` modules were deleted here (#5).
 
 2. **Parent repo registration** — follow `parent/docs/new-repo-checklist.md`
    steps 6–13: BOM entries, CI dispatch chain, dashboard, README badges,
@@ -100,8 +97,7 @@ lighter entries that you flesh out as you approach them.
 
 ### The longer version
 
-1. **Start with C1** — complete the scaffold. Move the agents bridge
-   from platform. Get CI green. Register in parent BOM.
+1. **Start with C1** — complete the scaffold. Get CI green. Register in parent BOM.
 
 2. **Read `STRATEGY.md`** — understand the positioning. Every module
    you build must be complementary to LC4j, not competitive. If you're

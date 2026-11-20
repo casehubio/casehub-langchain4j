@@ -32,9 +32,6 @@
         <module>hybrid-search-core</module>
         <module>hybrid-search</module>
         <module>hybrid-search-spring</module>
-        <module>agents-core</module>
-        <module>agents</module>
-        <module>agents-spring</module>
         <module>bom</module>
         <module>examples</module>
     </modules>
@@ -101,11 +98,6 @@
             <dependency>
                 <groupId>io.casehub.langchain4j</groupId>
                 <artifactId>casehub-langchain4j-hybrid-search-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.casehub.langchain4j</groupId>
-                <artifactId>casehub-langchain4j-agents-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

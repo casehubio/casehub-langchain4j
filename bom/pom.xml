@@ -85,23 +85,6 @@
                 <artifactId>casehub-langchain4j-hybrid-search-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>
-
-            <!-- Agents (ChatModel/AgentProvider bridge) -->
-            <dependency>
-                <groupId>io.casehub.langchain4j</groupId>
-                <artifactId>casehub-langchain4j-agents-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.casehub.langchain4j</groupId>
-                <artifactId>casehub-langchain4j-agents</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.casehub.langchain4j</groupId>
-                <artifactId>casehub-langchain4j-agents-spring</artifactId>
-                <version>${project.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
