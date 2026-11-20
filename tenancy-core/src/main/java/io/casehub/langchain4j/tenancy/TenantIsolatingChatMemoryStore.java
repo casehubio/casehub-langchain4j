@@ -3,24 +3,23 @@ package io.casehub.langchain4j.tenancy;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import io.casehub.platform.api.identity.CurrentPrincipal;
-
 import java.util.List;
 
 /**
- * Decorator that prefixes memoryId with the current tenant ID,
- * ensuring tenant isolation on any backing ChatMemoryStore.
- * <p>
- * The delegate can be any ChatMemoryStore — Redis, PostgreSQL, in-memory.
- * This decorator adds tenant isolation without replacing the backing store.
+ * Decorator that scopes every memory ID to the current tenant, so two tenants using the same
+ * memory ID never see each other's conversation.
+ *
+ * <p>The delegate can be any {@link ChatMemoryStore} — Redis, PostgreSQL, in-memory. It sees the
+ * memory ID {@code <tenant>::<memoryId>}. See {@link TenantContext} for the tenant rules.
  */
 public class TenantIsolatingChatMemoryStore implements ChatMemoryStore {
 
     private final ChatMemoryStore delegate;
-    private final CurrentPrincipal currentPrincipal;
+    private final TenantContext tenantContext;
 
-    public TenantIsolatingChatMemoryStore(ChatMemoryStore delegate, CurrentPrincipal currentPrincipal) {
+    public TenantIsolatingChatMemoryStore(ChatMemoryStore delegate, CurrentPrincipal principalOrNull) {
         this.delegate = delegate;
-        this.currentPrincipal = currentPrincipal;
+        this.tenantContext = new TenantContext(principalOrNull);
     }
 
     @Override
@@ -39,7 +38,8 @@ public class TenantIsolatingChatMemoryStore implements ChatMemoryStore {
     }
 
     private Object tenantScoped(Object memoryId) {
-        String tenantId = currentPrincipal.tenancyId();
-        return tenantId + "::" + memoryId;
+        return tenantContext.tenantId()
+                .<Object>map(tenant -> tenant + TenantContext.SEPARATOR + memoryId)
+                .orElse(memoryId);
     }
 }
