@@ -4,13 +4,13 @@
 
 | Module | ArtifactId | Package | Responsibility |
 |---|---|---|---|
-| `audit-core` | `casehub-langchain4j-audit-core` | `io.casehub.langchain4j.audit` | Pure Java: `CasehubChatModelListener`, `CasehubAgentListener` → `CaseLedgerEntry` |
+| `audit-core` | `casehub-langchain4j-audit-core` | `io.casehub.langchain4j.audit` | Pure Java: `CasehubChatModelListener`, `CasehubAgentListener`, `AuditEntryWriter` SPI, `LedgerAuditEntryWriter` → ledger `AuditRecord` |
 | `audit` | `casehub-langchain4j-audit` | `io.casehub.langchain4j.audit.quarkus` | CDI `@Produces` for listener beans. Jandex indexed. |
 | `audit-spring` | `casehub-langchain4j-audit-spring` | `io.casehub.langchain4j.audit.spring` | Spring `@Configuration @ConditionalOnClass` auto-config |
 | `tenancy-core` | `casehub-langchain4j-tenancy-core` | `io.casehub.langchain4j.tenancy` | Pure Java: `TenantIsolatingChatMemoryStore`, `TenantIsolatingEmbeddingStore`, `TenantIsolatingContentRetriever` |
 | `tenancy` | `casehub-langchain4j-tenancy` | `io.casehub.langchain4j.tenancy.quarkus` | CDI bean discovery and wrapping |
 | `tenancy-spring` | `casehub-langchain4j-tenancy-spring` | `io.casehub.langchain4j.tenancy.spring` | Spring `BeanPostProcessor` wrapping |
-| `governance-core` | `casehub-langchain4j-governance-core` | `io.casehub.langchain4j.governance` | Pure Java: `GovernanceAgentListener` → lineage + oversight + trust |
+| `governance-core` | `casehub-langchain4j-governance-core` | `io.casehub.langchain4j.governance` | Pure Java: `GovernanceAgentListener` (extends `CasehubAgentListener`) → lineage + trust; `TrustPort`, `LedgerTrustPort` |
 | `governance` | `casehub-langchain4j-governance` | `io.casehub.langchain4j.governance.quarkus` | CDI: registers `GovernanceAgentListener` |
 | `governance-spring` | `casehub-langchain4j-governance-spring` | `io.casehub.langchain4j.governance.spring` | Spring auto-config |
 | `hybrid-search-core` | `casehub-langchain4j-hybrid-search-core` | `io.casehub.langchain4j.hybridsearch` | Pure Java: `CasehubHybridContentRetriever` → neocortex RAG pipeline |
@@ -19,7 +19,11 @@
 | `bom` | `casehub-langchain4j-bom` | — | Maven BOM importing all published modules |
 | `examples` | `casehub-langchain4j-examples` | `io.casehub.langchain4j.examples` | Working demos. Not published (`maven.deploy.skip=true`). |
 
-All modules use GroupId `io.casehub.langchain4j` except `agents-*` which retains `io.casehub.platform.agent.langchain4j` for backward compatibility during the migration from platform.
+All modules use GroupId `io.casehub.langchain4j`.
+
+**Optional CaseHub types.** A class that names a type from an optional dependency (`LedgerAppender`, `CurrentPrincipal`, `TrustScoreSource`, …) must only do so inside a nested holder class that is loaded after a `Class.forName` / `ClassUtils.isPresent` check, and must look the bean up programmatically. An injection point of an absent type breaks startup.
+
+**Listeners observe, they do not veto.** LangChain4j swallows exceptions thrown from `AgentListener` callbacks (`ListenerAbortContractTest` pins this). Do not build enforcement into a listener.
 
 ---
 

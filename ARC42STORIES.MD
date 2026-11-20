@@ -198,40 +198,43 @@ sequenceDiagram
   participant App as LC4j Application
   participant CM as ChatModel (Ollama/OpenAI/etc)
   participant Listener as CasehubChatModelListener
-  participant Ledger as CaseLedgerEntry
+  participant Writer as AuditEntryWriter
+  participant Ledger as LedgerAppender
 
   App->>CM: chat(request)
   CM->>Listener: onRequest(ctx)
-  Listener->>Listener: store start timestamp in attributes
+  Listener->>Listener: store start time + subject ID in attributes
   CM->>CM: execute LLM call
   CM->>Listener: onResponse(ctx)
-  Listener->>Ledger: write(entryType=AI_CHAT_COMPLETION, tokens, cost, model, tenantId, complianceSupplement)
+  Listener->>Writer: write(AuditEvent AI_CHAT_COMPLETION: model, tokens, latency, finishReason)
+  alt ledger + tenant available
+    Writer->>Ledger: append(AuditRecord, tenancyId)
+  else
+    Writer->>Writer: log at INFO
+  end
   CM->>App: ChatResponse
 ```
 
-### Governance listener intercepting agent invocation
+### Governance listener observing agent invocation
+
+The listener observes; it cannot veto. LangChain4j catches exceptions thrown from `AgentListener`
+callbacks and runs the agent anyway, so no approval gate is enforced here.
 
 ```mermaid
 sequenceDiagram
-  participant Supervisor as @SupervisorAgent
+  participant Supervisor as Root agent
   participant GL as GovernanceAgentListener
-  participant Gate as OversightGateService
-  participant Trust as TrustSignalProvider
-  participant Ledger as CaseLedgerEntry
+  participant Trust as TrustPort (TrustScoreSource / OutcomeRecorder)
+  participant Writer as AuditEntryWriter
   participant Agent as Sub-Agent
 
   Supervisor->>GL: beforeAgentInvocation(request)
-  GL->>Ledger: create AGENT_INVOCATION_STARTED entry
-  GL->>Gate: checkGate(action) — requires approval?
-  alt approval required
-    GL->>GL: block thread, create WorkItem
-    GL->>GL: wait for human approval
-  end
-  GL->>Trust: checkTrustScore(agent)
+  GL->>Trust: score(agent)
+  GL->>Writer: AGENT_INVOCATION_STARTED (causedBy parent, trustScore)
   Supervisor->>Agent: invoke
   Agent->>GL: afterAgentInvocation(response)
-  GL->>Ledger: complete AGENT_INVOCATION_COMPLETED entry
-  GL->>Trust: updateTrustScore(agent, outcome)
+  GL->>Writer: AGENT_INVOCATION_COMPLETED (causedBy STARTED)
+  GL->>Trust: recordOutcome(agent, SOUND)
 ```
 
 ### Eidos identity enriching LC4j agent
@@ -312,8 +315,8 @@ Any module beyond Phase 1 requires documented justification in its README:
 
 | Journey | Phase | Description | Chapters | Status |
 |---|---|---|---|---|
-| J1: Foundation | — | Scaffold, CI, BOM, workspace, docs | C1 | 🔲 |
-| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🔲 |
+| J1: Foundation | — | Scaffold, CI, BOM, workspace, docs | C1 | ✅ |
+| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🚧 C2, C3, C5 done; C4 partial |
 | J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, agency attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
 | J4: Enterprise Infrastructure | 3 | CBR memory, SPLADE embedding, corpus ingestion, temporal scoring | C19–C22 | 🔲 |
 | J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, agency patterns + protocols + prompt optimisation, full integration guide | C23–C30 | 🔲 |
@@ -393,11 +396,11 @@ flowchart LR
 
 | # | Chapter | Journey | Phase | Layers | Status |
 |---|---|---|---|---|---|
-| 1 | Scaffold | J1 | — | L1, L2, L3 | 🔲 |
-| 2 | Audit — Ledger + Compliance | J2 | 1 | L1, L2, L3 | 🔲 |
-| 3 | Tenancy — Tenant Isolation Decorators | J2 | 1 | L1, L2, L3 | 🔲 |
-| 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | 🔲 |
-| 5 | Hybrid Search — SPLADE + Dense + RRF | J2 | 1 | L1, L2, L3 | 🔲 |
+| 1 | Scaffold | J1 | — | L1, L2, L3 | ✅ |
+| 2 | Audit — Ledger + Compliance | J2 | 1 | L1, L2, L3 | ✅ |
+| 3 | Tenancy — Tenant Isolation Decorators | J2 | 1 | L1, L2, L3 | ✅ |
+| 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | 🚧 lineage + trust done; oversight gate needs redesign |
+| 5 | Hybrid Search — SPLADE + Dense + RRF | J2 | 1 | L1, L2, L3 | ✅ |
 | 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
 | 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
 | 8 | CRAG Quality Gating — Hallucination Reduction | J2 | 1 | L1, L2, L3 | 🔲 |
@@ -430,7 +433,7 @@ flowchart LR
 
 #### C1 — Scaffold
 
-**Journey:** J1 | **Sequence:** 1 of 30 | **Status:** 🔲
+**Journey:** J1 | **Sequence:** 1 of 30 | **Status:** ✅
 
 **What this delivers**
 The repo exists with Maven multi-module structure, CI pipeline, BOM and workspace. IntelliJ can open the project. `mvn install` passes. The ChatModel ↔ AgentProvider bridge originally planned here was retired in platform#638 and its empty `agents*` modules were removed.
@@ -447,19 +450,19 @@ The repo exists with Maven multi-module structure, CI pipeline, BOM and workspac
 | `STRATEGY.md` | Complementary positioning and expansion policy |
 
 **Issues**
-- TBD — scaffold repo and Maven structure
+- #4 — baseline: versions, test infrastructure, spec links
 - #5 — remove agents bridge modules (retired in platform#638)
-- TBD — CI workflow and parent BOM registration
+- #1 — CI SNAPSHOT deploy (closed)
 
 ---
 
 #### C2 — Audit: Ledger + Compliance (Phase 1)
 
-**Journey:** J2 | **Sequence:** 2 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 2 of 30 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §audit
 
 **What this delivers**
-Every LLM call and every agent invocation produces a tamper-evident `CaseLedgerEntry`. Zero code change — classpath activation. EU AI Act Art.12 `ComplianceSupplement` on every AI decision. Token usage, cost estimate, latency tracking.
+Every LLM call and every agent invocation produces a ledger entry (`AuditRecord` via `LedgerAppender`), or a log line when no ledger is present. LLM-call audit is classpath-activated; the agent listener is attached to the root agent with one line. Token usage and latency are recorded. Not delivered: `ComplianceSupplement` (the ledger append API has no slot for it) and cost estimates (no pricing source).
 
 **Key files**
 
@@ -472,16 +475,14 @@ Every LLM call and every agent invocation produces a tamper-evident `CaseLedgerE
 | `audit-spring/.../AuditAutoConfiguration.java` | @ConditionalOnClass auto-configuration |
 
 **Issues**
-- TBD — CasehubChatModelListener implementation
-- TBD — CasehubAgentListener implementation
-- TBD — Quarkus CDI wiring + integration test
-- TBD — Spring auto-config + integration test
+- #6 — audit-core: chat model and agent invocation audit
+- #7 — Quarkus CDI and Spring wiring
 
 ---
 
 #### C3 — Tenancy: Tenant Isolation Decorators (Phase 1)
 
-**Journey:** J2 | **Sequence:** 3 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 3 of 30 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §tenancy
 
 **What this delivers**
@@ -498,20 +499,18 @@ Any `ChatMemoryStore`, `EmbeddingStore`, or `ContentRetriever` becomes multi-ten
 | `tenancy-spring/.../TenancyAutoConfiguration.java` | Spring: BeanPostProcessor wrapping |
 
 **Issues**
-- TBD — tenant-isolating decorators for all three SPIs
-- TBD — Quarkus CDI bean discovery and wrapping
-- TBD — Spring BeanPostProcessor
-- TBD — cross-tenant isolation verification tests
+- #8 — tenant-isolating decorators for all three SPIs, with isolation tests
+- #9 — Quarkus CDI and Spring wiring
 
 ---
 
 #### C4 — Governance: Oversight + Trust + Lineage (Phase 1)
 
-**Journey:** J2 | **Sequence:** 4 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 4 of 30 | **Status:** 🚧
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §governance
 
 **What this delivers**
-Three enterprise concerns injected into any LC4j agent pattern via `AgentListener`: causal lineage (every invocation → ledger entry with causedByEntryId chain), oversight gates (human approval before sensitive actions), trust routing (Bayesian Beta + EigenTrust influence agent selection).
+Delivered via `AgentListener`: causal lineage (shared with audit — `GovernanceAgentListener` extends `CasehubAgentListener`), the agent's trust score on each STARTED entry, and a trust outcome (`SOUND` / `FLAGGED`) for every invocation. **Not delivered: oversight gates.** LangChain4j swallows exceptions thrown by listeners, so a listener cannot block an agent; the gate needs a different mechanism. Trust-weighted routing is also not delivered — the score is recorded, not acted on.
 
 **Key files**
 
@@ -523,16 +522,14 @@ Three enterprise concerns injected into any LC4j agent pattern via `AgentListene
 | `governance-spring/.../GovernanceAutoConfiguration.java` | Spring auto-configuration |
 
 **Issues**
-- TBD — GovernanceAgentListener with causal lineage
-- TBD — OversightGate integration (optional, requires engine)
-- TBD — trust score recording (optional, requires ledger)
-- TBD — integration test: @SupervisorAgent with governance listener
+- #10 — GovernanceAgentListener: lineage + trust (done); oversight gate (open — cannot be enforced from an `AgentListener`, needs redesign)
+- #11 — Quarkus CDI and Spring wiring
 
 ---
 
 #### C5 — Hybrid Search: SPLADE + Dense + RRF (Phase 1)
 
-**Journey:** J2 | **Sequence:** 5 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 5 of 30 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §hybrid-search
 **Justification:** LC4j issue #4087 — acknowledged gap, no LC4j solution
 
@@ -548,10 +545,8 @@ Three enterprise concerns injected into any LC4j agent pattern via `AgentListene
 | `hybrid-search-spring/.../HybridSearchAutoConfiguration.java` | Spring auto-configuration |
 
 **Issues**
-- TBD — CasehubHybridContentRetriever implementation
-- TBD — Query → neocortex request mapping
-- TBD — neocortex result → LC4j Content mapping
-- TBD — integration test with Testcontainers Qdrant
+- #12 — CasehubHybridContentRetriever, mapping, Quarkus and Spring wiring
+- Not done: integration test with Testcontainers Qdrant
 
 ---
 

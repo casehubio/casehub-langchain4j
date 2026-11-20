@@ -1,6 +1,6 @@
 # Handoff — casehub-langchain4j
 
-**Status:** First draft — repo scaffolded, specs written, ready for implementation.
+**Status:** Phase 1 core implemented (C1–C3, C5 done; C4 lineage + trust done, oversight gate open). See `ARC42STORIES.MD` §9.3 and `docs/superpowers/plans/2026-11-20-phase-1-core-gaps.md`.
 **For:** Dmitrii Tikhomirov (treblereel)
 **Date:** 2026-09-25
 
@@ -61,14 +61,14 @@ https://github.com/casehubio/engine/tree/main/docs/specs/casehub-langchain4j
    steps 6–13: BOM entries, CI dispatch chain, dashboard, README badges,
    architecture diagram, guide sync.
 
-3. **CI workflow** — `.github/workflows/publish.yml` with
+3. ~~CI workflow~~ — **done.** — `.github/workflows/publish.yml` with
    `repository_dispatch` trigger for upstream changes.
 
 4. **Workspace setup** — `~/claude/public/casehub/casehub-langchain4j/`
    with symlinks, workspace git repo, blog-routing.yaml. Follow
    checklist steps 14.
 
-5. **Epic issues** — create epics matching the ARC42STORIES journeys.
+5. ~~Epic issues~~ — **done for Phase 1 core** (epic #3, issues #4–#13). — create epics matching the ARC42STORIES journeys.
    Create child issues for C1 (scaffold completion) and C2–C5 (Phase 1
    core modules).
 
