@@ -178,4 +178,44 @@ class CasehubAgentListenerTest {
 
         assertThat(listener.trackedConversations()).isZero();
     }
+
+    @Test
+    void currentEntryId_isTheOpenInvocation() {
+        listener.beforeAgentInvocation(request("parent", scope));
+        listener.beforeAgentInvocation(request("child", scope));
+        assertThat(listener.currentEntryId("m1")).contains(writer.ids.get(1));
+
+        listener.afterAgentInvocation(response("child", scope));
+        assertThat(listener.currentEntryId("m1")).contains(writer.ids.get(0));
+
+        listener.afterAgentInvocation(response("parent", scope));
+        assertThat(listener.currentEntryId("m1")).isEmpty();
+    }
+
+    @Test
+    void currentEntryId_unknownMemoryId_isEmpty() {
+        assertThat(listener.currentEntryId("nobody")).isEmpty();
+    }
+
+    @Test
+    void toolNotPerformed_marksEntry() {
+        CasehubAgentListener refusing = new CasehubAgentListener(writer) {
+            @Override
+            protected boolean toolPerformed(dev.langchain4j.agentic.observability.AfterAgentToolExecution after) {
+                return false;
+            }
+        };
+        refusing.beforeAgentInvocation(request("a", scope));
+        refusing.afterAgentToolExecution(tool("a", "freezeAccount", scope));
+
+        assertThat(writer.events.get(1).data()).containsEntry("performed", false);
+    }
+
+    @Test
+    void toolPerformed_byDefault_noPerformedKey() {
+        listener.beforeAgentInvocation(request("a", scope));
+        listener.afterAgentToolExecution(tool("a", "search", scope));
+
+        assertThat(writer.events.get(1).data()).doesNotContainKey("performed");
+    }
 }

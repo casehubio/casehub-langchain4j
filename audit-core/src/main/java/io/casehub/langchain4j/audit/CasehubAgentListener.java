@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -59,7 +60,7 @@ public class CasehubAgentListener implements AgentListener {
                 AuditEvent.AGENT_INVOCATION_STARTED,
                 actorId(request.agentName()),
                 subjectIdFor(memoryId),
-                currentEntryId(memoryId),
+                openEntryId(memoryId),
                 data));
         Frame frame = new Frame(entryId, System.nanoTime());
         openInvocations.compute(key(memoryId), (k, stack) -> {
@@ -97,11 +98,14 @@ public class CasehubAgentListener implements AgentListener {
         String agentName = after.agentInstance() == null ? null : after.agentInstance().name();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("toolName", after.toolExecution().request().name());
+        if (!toolPerformed(after)) {
+            data.put("performed", false);
+        }
         write(new AuditEvent(
                 AuditEvent.AGENT_TOOL_EXECUTED,
                 actorId(agentName),
                 subjectIdFor(memoryId),
-                currentEntryId(memoryId),
+                openEntryId(memoryId),
                 data));
     }
 
@@ -132,6 +136,15 @@ public class CasehubAgentListener implements AgentListener {
      */
     protected Map<String, Object> startData(AgentRequest request) {
         return Map.of();
+    }
+
+    /**
+     * Whether the tool call actually ran. LangChain4j reports a tool execution even when a wrapper
+     * refused it; subclasses that know about such refusals return {@code false}, and the
+     * {@code AGENT_TOOL_EXECUTED} entry is marked {@code performed = false}.
+     */
+    protected boolean toolPerformed(AfterAgentToolExecution after) {
+        return true;
     }
 
     /** The ledger subject for one agent conversation: stable for a given {@code memoryId}. */
@@ -188,7 +201,16 @@ public class CasehubAgentListener implements AgentListener {
         return popped[0];
     }
 
-    private UUID currentEntryId(Object memoryId) {
+    /**
+     * The entry ID of the innermost invocation still open for {@code memoryId} — what a new entry
+     * about that conversation should be caused by. Empty when nothing is open, or when the open
+     * invocation's STARTED entry could not be written.
+     */
+    public Optional<UUID> currentEntryId(Object memoryId) {
+        return Optional.ofNullable(openEntryId(memoryId));
+    }
+
+    private UUID openEntryId(Object memoryId) {
         Deque<Frame> stack = openInvocations.get(key(memoryId));
         Frame current = stack == null ? null : stack.peek();
         return current == null ? null : current.entryId();
