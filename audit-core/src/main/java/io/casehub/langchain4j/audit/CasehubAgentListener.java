@@ -148,7 +148,7 @@ public class CasehubAgentListener implements AgentListener {
     }
 
     /** The ledger subject for one agent conversation: stable for a given {@code memoryId}. */
-    protected UUID subjectIdFor(Object memoryId) {
+    public UUID subjectIdFor(Object memoryId) {
         return UUID.nameUUIDFromBytes(("lc4j-agent:" + memoryId).getBytes(StandardCharsets.UTF_8));
     }
 

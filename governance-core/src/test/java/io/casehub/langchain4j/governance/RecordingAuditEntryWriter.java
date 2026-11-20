@@ -7,13 +7,13 @@ import java.util.List;
 import java.util.UUID;
 
 /** Test double: records every event and hands out predictable, distinct entry IDs. */
-class RecordingAuditEntryWriter implements AuditEntryWriter {
+public class RecordingAuditEntryWriter implements AuditEntryWriter {
 
-    final List<AuditEvent> events = new ArrayList<>();
-    final List<UUID> ids = new ArrayList<>();
+    public final List<AuditEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+    public final List<UUID> ids = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     @Override
-    public UUID write(AuditEvent event) {
+    public synchronized UUID write(AuditEvent event) {
         events.add(event);
         UUID id = new UUID(0L, events.size());
         ids.add(id);

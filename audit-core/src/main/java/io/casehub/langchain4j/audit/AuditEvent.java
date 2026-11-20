@@ -24,6 +24,7 @@ public record AuditEvent(
     public static final String AGENT_INVOCATION_COMPLETED = "AGENT_INVOCATION_COMPLETED";
     public static final String AGENT_INVOCATION_FAILED = "AGENT_INVOCATION_FAILED";
     public static final String AGENT_TOOL_EXECUTED = "AGENT_TOOL_EXECUTED";
+    public static final String AGENT_TOOL_GATED = "AGENT_TOOL_GATED";
 
     public AuditEvent {
         Objects.requireNonNull(kind, "kind required");
