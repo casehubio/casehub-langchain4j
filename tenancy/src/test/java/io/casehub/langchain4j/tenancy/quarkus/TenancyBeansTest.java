@@ -14,6 +14,7 @@ import dev.langchain4j.store.memory.chat.InMemoryChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingChatMemoryStore;
 import io.casehub.langchain4j.tenancy.TenantIsolatingContentRetriever;
 import io.casehub.langchain4j.tenancy.TenantIsolatingEmbeddingStore;
+import io.quarkus.arc.ClientProxy;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
@@ -40,6 +41,9 @@ class TenancyBeansTest {
     @Inject
     SwitchablePrincipal principal;
 
+    @Inject
+    TestStores declaringBean;
+
     @BeforeEach
     void resetTenant() {
         principal.tenant = "a";
@@ -47,7 +51,7 @@ class TenancyBeansTest {
 
     @Test
     void unqualifiedInjection_isTenantWrapper() {
-        assertThat(store).isInstanceOf(TenantIsolatingChatMemoryStore.class);
+        assertThat(ClientProxy.unwrap(store)).isInstanceOf(TenantIsolatingChatMemoryStore.class);
     }
 
     @Test
@@ -72,7 +76,7 @@ class TenancyBeansTest {
 
     @Test
     void unqualifiedContentRetriever_filtersByTenant() {
-        assertThat(retriever).isInstanceOf(TenantIsolatingContentRetriever.class);
+        assertThat(ClientProxy.unwrap(retriever)).isInstanceOf(TenantIsolatingContentRetriever.class);
         assertThat(retriever.retrieve(Query.from("q")))
                 .extracting(c -> c.textSegment().text())
                 .containsExactly("a's doc");
@@ -80,11 +84,20 @@ class TenancyBeansTest {
 
     @Test
     void unqualifiedEmbeddingStore_tagsWithTenant() {
-        assertThat(embeddingStore).isInstanceOf(TenantIsolatingEmbeddingStore.class);
+        assertThat(ClientProxy.unwrap(embeddingStore)).isInstanceOf(TenantIsolatingEmbeddingStore.class);
 
         embeddingStore.add(Embedding.from(new float[] {1f}), TextSegment.from("doc"));
 
         assertThat(RecordingEmbeddingStore.ADDED)
                 .anySatisfy(s -> assertThat(s.metadata().getString("casehub_tenant_id")).isEqualTo("a"));
+    }
+
+    @Test
+    void beanThatDeclaresAStoreAndInjectsOne_getsTheWrapperWithoutRecursion() {
+        ChatMemoryStore injected = declaringBean.injected();
+
+        injected.updateMessages("cycle-test", List.of(UserMessage.from("hi")));
+
+        assertThat(rawStore.getMessages("a::cycle-test")).hasSize(1);
     }
 }

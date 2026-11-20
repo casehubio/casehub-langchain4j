@@ -1,34 +1,64 @@
 package io.casehub.langchain4j.examples;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.listener.ChatModelListener;
+import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.output.TokenUsage;
 import io.casehub.langchain4j.audit.CasehubChatModelListener;
-import io.casehub.langchain4j.audit.LoggingAuditEntryWriter;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import java.util.List;
 
 /**
- * Minimal example: add audit to an existing LangChain4j app.
- * <p>
- * With Quarkus or Spring, this is automatic — just add the dependency.
- * This example shows the pure-Java wiring for non-framework usage.
+ * Audit: every LLM call produces an audit entry.
  *
- * <pre>{@code
- * // 1. Create the audit listener
- * var listener = new CasehubChatModelListener(new LoggingAuditEntryWriter());
+ * <p>With {@code casehub-langchain4j-audit} on the classpath, {@link CasehubChatModelListener} is a
+ * CDI bean. quarkus-langchain4j attaches every {@code ChatModelListener} bean to the models it
+ * builds, so there the audit is automatic. This example builds its own offline model, so it
+ * attaches the listener by hand — the one line in {@link EchoModel#listeners()}.
  *
- * // 2. Register it on your existing ChatModel
- * ChatModel model = OpenAiChatModel.builder()
- *     .apiKey("...")
- *     .listeners(List.of(listener))  // <-- add this line
- *     .build();
- *
- * // 3. Use your model as normal — every call is now audited
- * model.chat("What is the capital of France?");
- * // Output: AUDIT [completion] model=gpt-4o latency=1234ms tokens=...
- * }</pre>
+ * <p>Entries go to the CaseHub ledger when it is present, and to the log otherwise.
  */
+@ApplicationScoped
 public class AuditExample {
 
-    public static void main(String[] args) {
-        var listener = new CasehubChatModelListener(new LoggingAuditEntryWriter());
-        System.out.println("Audit listener created: " + listener);
-        System.out.println("Register on your ChatModel via .listeners(List.of(listener))");
+    @Inject
+    CasehubChatModelListener auditListener;
+
+    public String ask(String question) {
+        ChatModel model = new EchoModel(auditListener);
+        return model.chat(ChatRequest.builder()
+                        .modelName("echo-model")
+                        .messages(UserMessage.from(question))
+                        .build())
+                .aiMessage()
+                .text();
+    }
+
+    /** Stands in for a real provider model; answers offline. */
+    static final class EchoModel implements ChatModel {
+
+        private final ChatModelListener listener;
+
+        EchoModel(ChatModelListener listener) {
+            this.listener = listener;
+        }
+
+        @Override
+        public List<ChatModelListener> listeners() {
+            return List.of(listener);
+        }
+
+        @Override
+        public ChatResponse doChat(ChatRequest request) {
+            String question = ((UserMessage) request.messages().get(0)).singleText();
+            return ChatResponse.builder()
+                    .aiMessage(AiMessage.from("echo: " + question))
+                    .tokenUsage(new TokenUsage(question.length(), question.length() + 6))
+                    .build();
+        }
     }
 }
