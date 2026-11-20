@@ -11,7 +11,7 @@ enterprise concern that langchain4j deliberately does not handle.
 |---|---|---|
 | **audit** | Ledger entries for every LLM call; causal lineage for agents | Add dependency (attach one listener for agents) |
 | **tenancy** | Tenant isolation on any store or retriever | Add dependency |
-| **governance** | Trust scores and outcome recording on top of the agent lineage | Add dependency, attach one listener |
+| **governance** | Trust scores and outcomes on the agent lineage; human approval gate for risky tool calls | Add dependency, attach the listener, wrap the agent's tools |
 | **hybrid-search** | SPLADE + dense + RRF hybrid retrieval ([langchain4j#4087](https://github.com/langchain4j/langchain4j/issues/4087)) | Inject one named bean |
 
 Each module group has three variants: `-core` (pure Java), bare name (Quarkus CDI), `-spring` (Spring auto-config).

@@ -214,6 +214,30 @@ sequenceDiagram
   CM->>App: ChatResponse
 ```
 
+### Oversight gate on a tool call
+
+```mermaid
+sequenceDiagram
+  participant Model as LLM
+  participant Gate as OversightToolGate (wrapped ToolExecutor)
+  participant Risk as @RiskClassifier ActionRiskClassifier
+  participant Work as casehub-work WorkItemApi
+  participant Tool as @Tool method
+
+  Model->>Gate: call freezeAccount(accountId=A1)
+  Gate->>Risk: classify(PlannedAction account.freeze)
+  Risk-->>Gate: GateRequired(mlro)
+  Gate->>Work: find WorkItem by call fingerprint
+  alt none / expired
+    Gate->>Work: create WorkItem (label = fingerprint)
+    Gate-->>Model: NOT PERFORMED … approval request pending
+  else completed, unused
+    Gate->>Work: add label "used"
+    Gate->>Tool: freezeAccount(A1)
+    Tool-->>Model: result
+  end
+```
+
 ### Governance listener observing agent invocation
 
 The listener observes; it cannot veto. LangChain4j catches exceptions thrown from `AgentListener`
@@ -315,7 +339,7 @@ Any module beyond Phase 1 requires documented justification in its README:
 | Journey | Phase | Description | Chapters | Status |
 |---|---|---|---|---|
 | J1: Foundation | — | Scaffold, CI, BOM, workspace, docs | C1 | ✅ |
-| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🚧 C2, C3, C5 done; C4 partial |
+| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🚧 C2–C5 done |
 | J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, agency attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
 | J4: Enterprise Infrastructure | 3 | CBR memory, SPLADE embedding, corpus ingestion, temporal scoring | C19–C22 | 🔲 |
 | J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, agency patterns + protocols + prompt optimisation, full integration guide | C23–C30 | 🔲 |
@@ -398,7 +422,7 @@ flowchart LR
 | 1 | Scaffold | J1 | — | L1, L2, L3 | ✅ |
 | 2 | Audit — Ledger + Compliance | J2 | 1 | L1, L2, L3 | ✅ |
 | 3 | Tenancy — Tenant Isolation Decorators | J2 | 1 | L1, L2, L3 | ✅ |
-| 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | 🚧 lineage + trust done; oversight gate needs redesign |
+| 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | ✅ (gate on tool calls; Spring approvals pending #15) |
 | 5 | Hybrid Search — SPLADE + Dense + RRF | J2 | 1 | L1, L2, L3 | ✅ |
 | 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
 | 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
@@ -505,11 +529,11 @@ Any `ChatMemoryStore`, `EmbeddingStore`, or `ContentRetriever` becomes multi-ten
 
 #### C4 — Governance: Oversight + Trust + Lineage (Phase 1)
 
-**Journey:** J2 | **Sequence:** 4 of 30 | **Status:** 🚧
+**Journey:** J2 | **Sequence:** 4 of 30 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §governance
 
 **What this delivers**
-Delivered via `AgentListener`: causal lineage (shared with audit — `GovernanceAgentListener` extends `CasehubAgentListener`), the agent's trust score on each STARTED entry, and a trust outcome (`SOUND` / `FLAGGED`) for every invocation. **Not delivered: oversight gates.** LangChain4j swallows exceptions thrown by listeners, so a listener cannot block an agent; the gate needs a different mechanism. Trust-weighted routing is also not delivered — the score is recorded, not acted on.
+Delivered via `AgentListener`: causal lineage (shared with audit — `GovernanceAgentListener` extends `CasehubAgentListener`), the agent's trust score on each STARTED entry, and a trust outcome (`SOUND` / `FLAGGED`) for every invocation. **Oversight gate:** an `AgentListener` cannot block (LangChain4j swallows listener exceptions), so the gate wraps the agent's tool executors (`OversightToolGate`): each call is classified by engine's `@RiskClassifier ActionRiskClassifier` beans and a call needing approval runs only after a casehub-work WorkItem for that exact call is completed, once. Trust-weighted routing is still not delivered — the score is recorded, not acted on.
 
 **Key files**
 
@@ -521,7 +545,8 @@ Delivered via `AgentListener`: causal lineage (shared with audit — `Governance
 | `governance-spring/.../GovernanceAutoConfiguration.java` | Spring auto-configuration |
 
 **Issues**
-- #10 — GovernanceAgentListener: lineage + trust (done); oversight gate (open — cannot be enforced from an `AgentListener`, needs redesign)
+- #10 — lineage + trust; oversight gate on tool calls (`OversightToolGate`, design `docs/superpowers/specs/2026-11-20-tool-oversight-gate-design.md`)
+- #15 — full Spring Boot approvals (open)
 - #11 — Quarkus CDI and Spring wiring
 
 ---

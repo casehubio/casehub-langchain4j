@@ -140,7 +140,7 @@ The tenant comes from `CurrentPrincipal.tenancyId()` on every call.
 
 **Artifacts:** `casehub-langchain4j-tenancy` (Quarkus), `casehub-langchain4j-tenancy-spring` (Spring Boot)
 
-### governance — trust on top of the audit lineage
+### governance — trust and an approval gate for tool calls
 
 **What you get**
 
@@ -155,10 +155,68 @@ Trust is active when `TrustScoreSource` and `OutcomeRecorder` beans exist; other
 records lineage only. Recording an outcome also needs a tenant. Outcomes name the attestor
 `system:casehub-langchain4j`, so they do not depend on the ledger's default-attestor setting.
 
-**Not available: an approval gate.** LangChain4j catches every exception thrown by an agent
-listener and runs the agent anyway, so a listener can observe an invocation but cannot stop it.
-This module therefore does not block agents pending human approval, and it does not route between
-agents by trust score — it records the score and the outcome.
+Trust scores are recorded, not used to choose between agents.
+
+#### Approval gate for tool calls
+
+Risky actions are tool calls, so the gate sits around an agent's tools. Wrap them when you build
+the agent:
+
+```java
+@Inject OversightToolGate gate;
+
+AgenticServices.agentBuilder(Treasurer.class)
+    .chatModel(model)
+    .tools(gate.forAgent("treasurer").wrap(new PaymentTools()))
+    .build();
+```
+
+Every call of a wrapped tool is classified by your engine risk rules — the `ActionRiskClassifier`
+beans qualified `@RiskClassifier`, the same rules engine applies to case workers. Give a tool the
+action type those rules know:
+
+```java
+@Tool("Freezes an account")
+@GatedAction("account.freeze")          // without it, the tool name is the action type
+public String freezeAccount(@P("accountId") String accountId) { ... }
+```
+
+Arguments reach the classifier by parameter name, so a rule that reads `amount` needs a parameter
+called `amount`.
+
+When a rule requires approval, the tool **does not run**. The model receives a result starting with
+`NOT PERFORMED:` that names the reason and an approval request — a casehub-work WorkItem for the
+rule's approver groups. Once a human completes that WorkItem, the **same** call (same tool, same
+arguments, same tenant) runs **once**; calling it again needs a new approval.
+
+| WorkItem status | What the next identical call does |
+|---|---|
+| none yet, or `EXPIRED` / `FAULTED` / `ESCALATED`, or approved and already used | opens a new request, refused |
+| `PENDING`, `ASSIGNED`, `IN_PROGRESS`, `DELEGATED`, `SUSPENDED` | refused: still pending |
+| `REJECTED`, `CANCELLED`, `OBSOLETE` | refused: rejected (no new request) |
+| `COMPLETED`, not used yet | runs the tool, marks the request used |
+
+**Refused when in doubt.** No tenant, unreadable arguments, a classifier that fails, an unavailable
+WorkItem service, a rule without a fixed approver group, or a rule that needs several approvers
+(quorum) — the call is refused, never run.
+
+| On the classpath / in the container | Behaviour |
+|---|---|
+| No `@RiskClassifier` beans | every wrapped call runs (INFO at startup) |
+| Classifiers, no `WorkItemApi` bean | calls needing approval are refused (WARN at startup) |
+| Classifiers + `WorkItemApi` + `CurrentPrincipal` | full gate |
+
+**Spring Boot:** casehub-work provides `WorkItemApi` only for Quarkus today, so in Spring calls
+that need approval are refused unless your application defines a `WorkItemApi` bean
+([#15](https://github.com/casehubio/casehub-langchain4j/issues/15)).
+
+**Audit:** every gate decision is an `AGENT_TOOL_GATED` entry (`pending`, `rejected`, `approved`,
+`unchecked`) in the agent's lineage, without the tool arguments. A refused call's
+`AGENT_TOOL_EXECUTED` entry carries `performed = false`.
+
+**Known limits:** two identical calls on different nodes can both use one approval (one node is
+safe); an approved call must be retried with identical arguments; tools added to an agent without
+`wrap(...)` are not gated; an `AgentListener` still cannot stop an agent — only the tool gate can.
 
 **Artifacts:** `casehub-langchain4j-governance` (Quarkus), `casehub-langchain4j-governance-spring` (Spring Boot)
 
