@@ -1,29 +1,19 @@
 package io.casehub.langchain4j.audit;
 
-import dev.langchain4j.model.chat.request.ChatRequest;
-import dev.langchain4j.model.chat.response.ChatResponse;
+import java.util.UUID;
 import org.jboss.logging.Logger;
 
-/**
- * Fallback writer that logs audit entries when no ledger is available.
- */
+/** Fallback writer that logs audit events when no ledger is available. */
 public class LoggingAuditEntryWriter implements AuditEntryWriter {
 
     private static final Logger LOG = Logger.getLogger(LoggingAuditEntryWriter.class);
 
     @Override
-    public void writeCompletion(ChatRequest request, ChatResponse response, long latencyMs) {
-        LOG.infof("AUDIT [completion] model=%s latency=%dms tokens=%s",
-                request.modelName(),
-                latencyMs,
-                response.tokenUsage());
-    }
-
-    @Override
-    public void writeError(ChatRequest request, Throwable error) {
-        LOG.warnf("AUDIT [error] model=%s error=%s: %s",
-                request.modelName(),
-                error.getClass().getSimpleName(),
-                error.getMessage());
+    public UUID write(AuditEvent event) {
+        UUID entryId = UUID.randomUUID();
+        LOG.infof("AUDIT [%s] entry=%s actor=%s subject=%s causedBy=%s data=%s",
+                event.kind(), entryId, event.actorId(), event.subjectId(),
+                event.causedByEntryId(), event.data());
+        return entryId;
     }
 }
