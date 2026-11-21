@@ -52,6 +52,16 @@ public final class CragTestBeans {
         }
     }
 
+    /** A second evaluator, to make resolution ambiguous. */
+    @Alternative
+    @Singleton
+    public static class SecondEvaluator implements RelevanceEvaluator {
+        @Override
+        public List<ScoredGrade> evaluateChunks(String query, List<RetrievedChunk> chunks) {
+            return chunks.stream().map(c -> new ScoredGrade(RelevanceGrade.CORRECT, 1f)).toList();
+        }
+    }
+
     @Alternative
     @Singleton
     public static class TenantA implements CurrentPrincipal {

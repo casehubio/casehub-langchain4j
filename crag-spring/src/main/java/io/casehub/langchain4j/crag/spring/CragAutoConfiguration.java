@@ -5,6 +5,7 @@ import io.casehub.langchain4j.crag.CragContentRetriever;
 import io.casehub.langchain4j.crag.CragRetrievalQuality;
 import io.casehub.neocortex.rag.RelevanceEvaluator;
 import org.jboss.logging.Logger;
+import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -59,7 +60,13 @@ public class CragAutoConfiguration {
                     || bean instanceof RelevanceEvaluator) {
                 return bean;
             }
-            RelevanceEvaluator current = evaluator.getIfAvailable();
+            RelevanceEvaluator current;
+            try {
+                current = evaluator.getIfAvailable();
+            } catch (NoUniqueBeanDefinitionException e) {
+                throw new IllegalStateException("casehub-langchain4j-crag found several RelevanceEvaluator beans and"
+                        + " cannot tell which one grades retrieved content — keep one, or mark one @Primary", e);
+            }
             if (current == null) {
                 LOG.warnf("casehub-langchain4j-crag: no RelevanceEvaluator bean — content from ContentRetriever %s"
                         + " is NOT graded", beanName);
