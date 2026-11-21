@@ -35,6 +35,7 @@
         <module>crag-core</module>
         <module>crag</module>
         <module>crag-spring</module>
+        <module>tracking-core</module>
         <module>bom</module>
         <module>examples</module>
     </modules>
@@ -131,6 +132,21 @@
             <dependency>
                 <groupId>io.casehub.langchain4j</groupId>
                 <artifactId>casehub-langchain4j-crag-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
