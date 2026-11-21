@@ -32,6 +32,7 @@
         <module>hybrid-search-core</module>
         <module>hybrid-search</module>
         <module>hybrid-search-spring</module>
+        <module>crag-core</module>
         <module>bom</module>
         <module>examples</module>
     </modules>
@@ -108,6 +109,11 @@
             <dependency>
                 <groupId>io.casehub.langchain4j</groupId>
                 <artifactId>casehub-langchain4j-hybrid-search-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-crag-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
