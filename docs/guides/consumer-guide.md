@@ -40,7 +40,7 @@ artifact (`-spring`); the `-core` artifacts are pure Java and come in transitive
 
 | Module | Automatic on the classpath | Needs one line from you |
 |---|---|---|
-| audit | Audit entry for every LLM call (`ChatModelListener` bean) | Attach `CasehubAgentListener` to your root agent |
+| audit | Audit entry for every LLM call of models the framework builds (quarkus-langchain4j and the LangChain4j Spring starters attach `ChatModelListener` beans) | Attach `CasehubAgentListener` to your root agent; for a model you build yourself, add the `CasehubChatModelListener` bean to its `.listeners(...)` |
 | tenancy | `ChatMemoryStore`, `EmbeddingStore`, `ContentRetriever` beans become tenant-isolated | — |
 | governance | Replaces the audit agent listener with one that also records trust | Attach the listener to your root agent (same line as audit) |
 | hybrid-search | The bean `casehubHybridRetriever` exists | Inject it by name and set the corpora property |
