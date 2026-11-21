@@ -24,8 +24,10 @@ import org.springframework.core.env.Environment;
  * its own tracker bean.
  *
  * <p>The post-processor runs after CRAG's and tenancy's, so with all three modules the result is
- * Tracking(CRAG(Tenancy(app))). The hybrid-search bean ({@value #HYBRID_BEAN_NAME}) is not wrapped:
- * neocortex tracks it itself, under the corpora it actually searched. Recorded retrievals are
+ * Tracking(CRAG(Tenancy(app))). The hybrid-search bean ({@value #HYBRID_BEAN_NAME}) is not wrapped: it
+ * searches its own corpora, so recording it under this module's corpus name would split those
+ * documents across two names. In Spring its retrievals are therefore not tracked (neocortex's own
+ * tracking is CDI-only, see #20). Recorded retrievals are
  * published as neocortex {@code RetrievalRecorded} application events.
  */
 @AutoConfiguration
