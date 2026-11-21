@@ -39,4 +39,58 @@ class TenancyBeanSelectionTest {
 
         assertThat(TenancyBeans.narrowLikeArc(List.of(app, crag))).containsExactly(app);
     }
+
+    /** Stand-in for one of this library's decorating producers (package io.casehub.langchain4j). */
+    static final class OuterDecoratorBeans {}
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Bean<?> beanOf(Class<?> beanClass, int priority) {
+        Bean<?> bean = bean(true, priority, Default.Literal.INSTANCE);
+        when(((Bean) bean).getBeanClass()).thenReturn(beanClass);
+        return bean;
+    }
+
+    private static List<String> warningsDuring(Runnable action) {
+        java.util.logging.Logger logger = java.util.logging.Logger.getLogger(TenancyBeans.class.getName());
+        List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                messages.add(String.valueOf(record.getMessage()));
+            }
+
+            @Override
+            public void flush() {}
+
+            @Override
+            public void close() {}
+        };
+        logger.addHandler(handler);
+        try {
+            action.run();
+        } finally {
+            logger.removeHandler(handler);
+        }
+        return messages;
+    }
+
+    @Test
+    void libraryProducerAboveUs_notWarned() {
+        Bean<?> app = bean(false, 0, Default.Literal.INSTANCE);
+        Bean<?> tracking = beanOf(OuterDecoratorBeans.class, 300);
+
+        List<String> warnings = warningsDuring(() -> assertThat(TenancyBeans.narrowLikeArc(List.of(app, tracking))).containsExactly(app));
+
+        assertThat(warnings).noneMatch(m -> m.contains("outranks"));
+    }
+
+    @Test
+    void applicationAlternativeAboveUs_stillWarned() {
+        Bean<?> app = bean(false, 0, Default.Literal.INSTANCE);
+        Bean<?> appAlternative = beanOf(Object.class, 300);
+
+        List<String> warnings = warningsDuring(() -> assertThat(TenancyBeans.narrowLikeArc(List.of(app, appAlternative))).containsExactly(app));
+
+        assertThat(warnings).anyMatch(m -> m.contains("outranks"));
+    }
 }
