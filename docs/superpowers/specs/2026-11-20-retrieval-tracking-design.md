@@ -176,17 +176,16 @@ the tenant filter and the CRAG filter, as neocortex orders its own decorators (t
 - **The hybrid-search bean is not wrapped** *(my call, builder-check finding)*: it searches the
   corpora named in its own configuration, and recording it here under
   `casehub.langchain4j.tracking.corpus` would split one corpus's documents across two names in the
-  analysis. In Quarkus its retrievals can be tracked by neocortex itself
-  (`casehub.rag.tracking.enabled=true`), under the right corpora; in Spring they are not tracked
-  (neocortex's tracking is a CDI decorator — #20) *(final-review correction)*. Spring's post-processor skips the `casehubHybridRetriever` bean; Quarkus
+  analysis. Its retrievals are tracked by neocortex itself (`casehub.rag.tracking.enabled=true`),
+  under the right corpora — in Quarkus with `rag-tracking`, in Spring with `rag-tracking-spring`
+  (neocortex#1200, #20). Spring's post-processor skips the `casehubHybridRetriever` bean; Quarkus
   wraps only the unqualified retriever, which the qualified hybrid bean never is.
 
 ### Spring tracker
 
-`SqliteRetrievalTracker` cannot be created by Spring. A Spring application declares a
-`RetrievalTracker` bean itself (neocortex's `InMemoryRetrievalTracker` for tests, or its own
-implementation). **TODO** (#20): a Spring-friendly SQLite tracker — upstream in
-neocortex (a plain constructor on `SqliteRetrievalTracker`) or a Spring adapter here.
+Resolved upstream (#20, neocortex#1200): neocortex's `rag-tracking-spring` declares the
+`SqliteRetrievalTracker` bean when `casehub.rag.tracking.sqlite.path` is set, and backs off when the
+application defines its own `RetrievalTracker`.
 
 ### Feedback and analytics (consumer guide only)
 
@@ -208,7 +207,8 @@ tenant used in `CorpusRef` for analysis.
 - `maxResults` is the returned count, not the requested limit.
 - A missing score is recorded as `0.0` (the SQLite schema rejects NaN).
 - A non-empty retrieval in which no content has `source_document_id` is not recorded.
-- Hybrid-search retrievals are tracked only through neocortex's own tracking (Quarkus only).
+- Hybrid-search retrievals are tracked only through neocortex's own tracking (`rag-tracking` or
+  `rag-tracking-spring` with `casehub.rag.tracking.enabled=true`).
 - `retrieval_id` in segment metadata makes the same passage from two retrievals unequal, so a
   multi-retrieval pipeline (query expansion, routing) no longer de-duplicates it *(final review)*.
 - Spring needs an application-provided tracker (TODO above).

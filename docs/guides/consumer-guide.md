@@ -313,8 +313,9 @@ retrieval: a tracking error is logged and the retrieval is returned as is.
 
 - **Quarkus:** add `io.casehub:casehub-neocortex-rag-tracking` and set
   `casehub.rag.tracking.sqlite.path` (it has no default; neocortex fails startup without it).
-- **Spring Boot:** declare a `RetrievalTracker` bean — neocortex's `SqliteRetrievalTracker` can only
-  be created by CDI ([#20](https://github.com/casehubio/casehub-langchain4j/issues/20)).
+- **Spring Boot:** add `io.casehub:casehub-neocortex-rag-tracking-spring` and set
+  `casehub.rag.tracking.sqlite.path` (without it no tracker bean is created). Or declare your own
+  `RetrievalTracker` bean; neocortex's then backs off.
 
 Exactly one tracker; several fail with a clear error.
 
@@ -345,10 +346,9 @@ List<QueryQualitySignal> zeroHits = RetrievalAnalyzer.zeroHitQueries(tracker, co
 **Known limits:** one corpus name (`casehub.langchain4j.tracking.corpus`, default `default`) for
 every wrapped retriever; `maxResults` in the record is the number of contents returned
 (`ContentRetriever` has no requested limit); a missing score is recorded as `0.0`. The hybrid-search
-bean is not wrapped, because it searches its own corpora: in Quarkus, neocortex's own tracking
-(`casehub.rag.tracking.enabled=true` with `casehub-neocortex-rag-tracking`) records it under the
-corpora it actually searched; **in Spring Boot hybrid-search retrievals are not tracked** (neocortex's
-tracking is a CDI decorator — see [#20](https://github.com/casehubio/casehub-langchain4j/issues/20)).
+bean is not wrapped, because it searches its own corpora: neocortex's own tracking records it under
+the corpora it actually searched — set `casehub.rag.tracking.enabled=true` with
+`casehub-neocortex-rag-tracking` (Quarkus) or `casehub-neocortex-rag-tracking-spring` (Spring Boot).
 
 **Stamping and de-duplication.** `retrieval_id` is part of the segment metadata, and LangChain4j
 compares contents including their metadata. In a pipeline that retrieves several times per question
