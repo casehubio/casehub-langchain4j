@@ -14,6 +14,7 @@ import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
 
 /**
  * Wraps every {@link ChatMemoryStore}, {@link EmbeddingStore} and {@link ContentRetriever} bean in
@@ -30,13 +31,25 @@ import org.springframework.context.annotation.Bean;
 @ConditionalOnClass({CurrentPrincipal.class, ChatMemoryStore.class})
 public class TenancyAutoConfiguration {
 
+    /**
+     * Runs early, so post-processors of decorating modules (for example crag, which runs late) wrap
+     * the tenant-isolated bean and never the reverse.
+     */
+    public static final int POST_PROCESSOR_ORDER = Ordered.HIGHEST_PRECEDENCE + 100;
+
     @Bean
     static TenantIsolatingBeanPostProcessor tenantIsolatingBeanPostProcessor(
             ObjectProvider<CurrentPrincipal> principal) {
         return new TenantIsolatingBeanPostProcessor(principal);
     }
 
-    static final class TenantIsolatingBeanPostProcessor implements BeanPostProcessor {
+    static final class TenantIsolatingBeanPostProcessor implements BeanPostProcessor, Ordered {
+
+        @Override
+        public int getOrder() {
+            return POST_PROCESSOR_ORDER;
+        }
+
 
         private final ObjectProvider<CurrentPrincipal> principal;
 

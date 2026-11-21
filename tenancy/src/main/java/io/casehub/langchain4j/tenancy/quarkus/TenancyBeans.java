@@ -47,6 +47,9 @@ public class TenancyBeans {
 
     private static final Type EMBEDDING_STORE_TYPE = new TypeLiteral<EmbeddingStore<TextSegment>>() {}.getType();
 
+    /** This module's alternative priority; decorating modules that wrap tenancy use a higher one. */
+    public static final int PRIORITY = 100;
+
     @Inject
     BeanManager beanManager;
 
@@ -117,8 +120,11 @@ public class TenancyBeans {
      * highest priority first; {@code @DefaultBean}s lose to any other bean.
      */
     private static List<Bean<?>> narrowLikeArc(List<Bean<?>> beans) {
+        // A decorating alternative that outranks this module's own (for example crag at 200) wraps
+        // tenancy, never the reverse: choosing it as the delegate would make the two wrap each other.
         List<Bean<?>> candidates = beans.stream()
                 .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                .filter(b -> !(b.isAlternative() && priority(b) > PRIORITY))
                 .toList();
         if (candidates.size() <= 1) {
             return candidates.isEmpty() ? beans : candidates;

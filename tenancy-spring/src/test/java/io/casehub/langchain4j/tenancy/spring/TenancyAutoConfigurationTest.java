@@ -243,4 +243,14 @@ class TenancyAutoConfigurationTest {
             return wrapped;
         }
     }
+
+    @Test
+    void postProcessor_isOrderedEarly() {
+        runner.run(context -> {
+            Object processor = context.getBean("tenantIsolatingBeanPostProcessor");
+            assertThat(processor).isInstanceOf(org.springframework.core.Ordered.class);
+            assertThat(((org.springframework.core.Ordered) processor).getOrder())
+                    .isEqualTo(org.springframework.core.Ordered.HIGHEST_PRECEDENCE + 100);
+        });
+    }
 }
