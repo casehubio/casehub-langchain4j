@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.casehub.langchain4j</groupId>
+        <artifactId>casehub-langchain4j-parent</artifactId>
+        <version>0.4-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>casehub-langchain4j-crag</artifactId>
+    <packaging>jar</packaging>
+    <name>CaseHub LangChain4j :: CRAG (Quarkus)</name>
+    <description>Quarkus wiring for the CRAG quality filter: wraps the application's ContentRetriever.</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.casehub.langchain4j</groupId>
+            <artifactId>casehub-langchain4j-crag-core</artifactId>
+        </dependency>
+        <!-- Not optional: the producer injects RelevanceEvaluator so ArC keeps class-style evaluator beans. -->
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-neocortex-rag-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.casehub.langchain4j</groupId>
+            <artifactId>casehub-langchain4j-tenancy</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals><goal>jandex</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
