@@ -7,9 +7,8 @@ import io.casehub.langchain4j.governance.TrustPort;
 import io.casehub.ledger.api.spi.OutcomeRecorder;
 import io.casehub.ledger.api.spi.TrustScoreSource;
 import io.casehub.platform.api.identity.CurrentPrincipal;
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.InstanceHandle;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 import java.util.function.Supplier;
@@ -31,56 +30,32 @@ public class GovernanceBeans {
     public static final String OUTCOME_CONFIDENCE = "casehub.langchain4j.governance.outcome-confidence";
 
     private static final Logger LOG = Logger.getLogger(GovernanceBeans.class);
-    private static final String TRUST_SOURCE = "io.casehub.ledger.api.spi.TrustScoreSource";
-    private static final String CURRENT_PRINCIPAL = "io.casehub.platform.api.identity.CurrentPrincipal";
 
     @Produces
     @Singleton
-    public GovernanceAgentListener governanceAgentListener(AuditEntryWriter writer) {
+    public GovernanceAgentListener governanceAgentListener(AuditEntryWriter writer, Instance<TrustScoreSource> source,
+            Instance<OutcomeRecorder> recorder, Instance<CurrentPrincipal> principal) {
+        // Injected, not looked up: ArC then keeps class-style beans nothing else injects.
         double confidence = ConfigProvider.getConfig()
                 .getOptionalValue(OUTCOME_CONFIDENCE, Double.class)
                 .orElse(LedgerTrustPort.DEFAULT_CONFIDENCE);
         if (!(confidence > 0.0 && confidence <= 1.0)) {
             throw new IllegalArgumentException(OUTCOME_CONFIDENCE + " must be in (0.0, 1.0] — got " + confidence);
         }
-        TrustPort trust = isPresent(TRUST_SOURCE) ? LedgerSupport.trustPort(confidence) : null;
-        Supplier<String> tenancy = isPresent(CURRENT_PRINCIPAL) ? PrincipalSupport.tenancy() : () -> null;
+        TrustPort trust = source.isResolvable() && recorder.isResolvable()
+                ? new LedgerTrustPort(source.get(), recorder.get(), confidence)
+                : null;
+        Supplier<String> tenancy = tenancy(principal);
         LOG.infof("CaseHub governance: agent lineage %s",
                 trust == null ? "only — no trust system available" : "and trust outcomes");
         return new GovernanceAgentListener(writer, trust, tenancy);
     }
 
-    private static boolean isPresent(String className) {
-        try {
-            Class.forName(className, false, Thread.currentThread().getContextClassLoader());
-            return true;
-        } catch (ClassNotFoundException | LinkageError e) {
-            return false;
+    private static Supplier<String> tenancy(Instance<CurrentPrincipal> principal) {
+        if (!principal.isResolvable()) {
+            return () -> null;
         }
-    }
-
-    /** Touches the optional ledger types; loaded only when they are present. */
-    private static final class LedgerSupport {
-
-        static TrustPort trustPort(double confidence) {
-            InstanceHandle<TrustScoreSource> source = Arc.container().instance(TrustScoreSource.class);
-            InstanceHandle<OutcomeRecorder> recorder = Arc.container().instance(OutcomeRecorder.class);
-            return source.isAvailable() && recorder.isAvailable()
-                    ? new LedgerTrustPort(source.get(), recorder.get(), confidence)
-                    : null;
-        }
-    }
-
-    /** Touches the optional identity type; loaded only when it is present. */
-    private static final class PrincipalSupport {
-
-        static Supplier<String> tenancy() {
-            InstanceHandle<CurrentPrincipal> principal = Arc.container().instance(CurrentPrincipal.class);
-            if (!principal.isAvailable()) {
-                return () -> null;
-            }
-            CurrentPrincipal current = principal.get();
-            return current::tenancyId;
-        }
+        CurrentPrincipal current = principal.get();
+        return current::tenancyId;
     }
 }
