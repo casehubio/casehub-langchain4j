@@ -49,6 +49,11 @@ public class CragBeans {
     public ContentRetriever cragContentRetriever(@Any Instance<ContentRetriever> keepAlive,
             Instance<RelevanceEvaluator> evaluator, Event<CragRetrievalQuality> quality) {
         ContentRetriever delegate = resolvedBean();
+        if (evaluator.isAmbiguous()) {
+            throw new AmbiguousResolutionException("casehub-langchain4j-crag found several RelevanceEvaluator beans"
+                    + " and cannot tell which one grades retrieved content — keep one, or mark one as the alternative"
+                    + " with the highest priority");
+        }
         if (!evaluator.isResolvable()) {
             LOG.warn("casehub-langchain4j-crag: no RelevanceEvaluator bean — retrieved content is NOT graded."
                     + " Add neocortex's rag-crossencoder or define a RelevanceEvaluator bean.");

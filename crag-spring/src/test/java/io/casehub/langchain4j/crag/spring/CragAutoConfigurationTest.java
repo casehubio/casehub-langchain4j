@@ -132,4 +132,13 @@ class CragAutoConfigurationTest {
                     assertThat(EVALUATED).containsExactly("good-a", "bad-a");
                 });
     }
+
+    @Test
+    void severalEvaluators_failWithClearMessage() {
+        runner.withUserConfiguration(AppConfig.class, EvaluatorConfig.class)
+                .withBean("secondEvaluator", RelevanceEvaluator.class,
+                        () -> (query, chunks) -> chunks.stream().map(c -> new ScoredGrade(RelevanceGrade.CORRECT, 1f)).toList())
+                .run(context -> assertThat(context).hasFailed().getFailure()
+                        .hasStackTraceContaining("several RelevanceEvaluator beans"));
+    }
 }
