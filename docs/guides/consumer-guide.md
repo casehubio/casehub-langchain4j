@@ -44,6 +44,7 @@ artifact (`-spring`); the `-core` artifacts are pure Java and come in transitive
 | tenancy | `ChatMemoryStore`, `EmbeddingStore`, `ContentRetriever` beans become tenant-isolated | — |
 | governance | Replaces the audit agent listener with one that also records trust | Attach the listener to your root agent (same line as audit) |
 | hybrid-search | The bean `casehubHybridRetriever` exists | Inject it by name and set the corpora property |
+| crag | Your `ContentRetriever` bean is graded and filtered, when a `RelevanceEvaluator` bean exists | — |
 
 LangChain4j has no global registry for agent listeners, so the agent listener must be attached to
 an agent. It is inherited by all sub-agents, so attach it once, at the root:
@@ -260,6 +261,36 @@ supply the tenant. A missing piece is reported on first use, not at startup.
 
 ---
 
+### crag — Corrective RAG quality filter for any retriever
+
+**What it wraps:** your `ContentRetriever` bean — pgvector, Qdrant used directly, web search, SQL,
+anything.
+
+**What you get:** before the model sees a retrieval, every content is graded CORRECT / AMBIGUOUS /
+INCORRECT by neocortex's `RelevanceEvaluator`:
+
+- INCORRECT content is removed — an empty list is a valid answer when nothing is relevant;
+- CORRECT content comes before AMBIGUOUS, in the retriever's order within each grade;
+- each surviving content carries `relevance_grade` in its segment metadata and, when the evaluator
+  gives a finite score, `ContentMetadata.RERANKED_SCORE`;
+- each retrieval publishes a `CragRetrievalQuality` event (a CDI event in Quarkus, an application
+  event in Spring) with the counts per grade.
+
+**You bring the evaluator.** Add neocortex's `casehub-neocortex-rag-crossencoder` (cross-encoder or
+ColBERT grading) or define your own `RelevanceEvaluator` bean. Thresholds belong to the evaluator and
+must be calibrated for its model.
+
+| Situation | Behaviour |
+|---|---|
+| No `RelevanceEvaluator` bean | Retrievers are not wrapped; a WARN at startup |
+| Every content already carries a grade (e.g. hybrid-search behind neocortex's CRAG) | Returned untouched, not graded twice |
+| The evaluator fails or returns a malformed answer | Content returned **unfiltered**, each marked `relevance_grade = UNGRADED`; a WARN; the quality event has `evaluated = false` |
+
+**No search expansion.** neocortex's own CRAG asks for more results when too few survive;
+LangChain4j's `ContentRetriever` has no way to ask for more, so this module only filters and orders.
+
+**Artifacts:** `casehub-langchain4j-crag` (Quarkus), `casehub-langchain4j-crag-spring` (Spring Boot)
+
 ## Configuration Reference
 
 | Property | Default | Description |
@@ -288,6 +319,7 @@ A missing CaseHub dependency never fails startup.
 | tenancy | Tenant-isolated stores | Passes through unchanged (no `CurrentPrincipal` bean) |
 | governance | Lineage + trust score + outcomes | Lineage only |
 | hybrid-search | Hybrid retrieval | Clear error on first use — it is an implementation, not a decorator |
+| crag | Graded, filtered retrieval (needs a `RelevanceEvaluator`) | Retrievers left unwrapped, WARN at startup |
 
 ---
 
@@ -296,6 +328,11 @@ A missing CaseHub dependency never fails startup.
 - **audit + governance:** governance replaces the audit agent listener; attach one listener.
 - **tenancy + hybrid-search:** hybrid results are tagged with the tenant, so the tenancy content
   filter accepts them.
+- **tenancy + crag:** CRAG wraps the tenant filter — CRAG(Tenancy(your retriever)) — so other
+  tenants' content never reaches the evaluator.
+- **crag + hybrid-search:** in Spring the hybrid bean is wrapped too; results already graded by
+  neocortex's CRAG are passed through, not graded again. In Quarkus only the unqualified retriever
+  is wrapped.
 - **tenancy + your own retriever:** content your retriever returns must carry `casehub_tenant_id`,
   or it is dropped. Content stored through a tenant-isolated `EmbeddingStore` already does.
 

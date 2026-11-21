@@ -16,6 +16,9 @@
 | `hybrid-search-core` | `casehub-langchain4j-hybrid-search-core` | `io.casehub.langchain4j.hybridsearch` | Pure Java: `CasehubHybridContentRetriever` → neocortex RAG pipeline |
 | `hybrid-search` | `casehub-langchain4j-hybrid-search` | `io.casehub.langchain4j.hybridsearch.quarkus` | CDI: registers `ContentRetriever` |
 | `hybrid-search-spring` | `casehub-langchain4j-hybrid-search-spring` | `io.casehub.langchain4j.hybridsearch.spring` | Spring auto-config |
+| `crag-core` | `casehub-langchain4j-crag-core` | `io.casehub.langchain4j.crag` | Pure Java: `CragContentRetriever` (grades via neocortex `RelevanceEvaluator`), `CragRetrievalQuality` |
+| `crag` | `casehub-langchain4j-crag` | `io.casehub.langchain4j.crag.quarkus` | CDI: `@Alternative @Priority(200)` producer wrapping the resolved `ContentRetriever` (outside tenancy's 100) |
+| `crag-spring` | `casehub-langchain4j-crag-spring` | `io.casehub.langchain4j.crag.spring` | Spring: late-ordered `BeanPostProcessor` (after tenancy's early one) |
 | `bom` | `casehub-langchain4j-bom` | — | Maven BOM importing all published modules |
 | `examples` | `casehub-langchain4j-examples` | `io.casehub.langchain4j.examples` | Working demos. Not published (`maven.deploy.skip=true`). |
 
@@ -67,6 +70,11 @@ are kept.
 | Replaces a module default | plain bean | `GovernanceAgentListener` replaces the audit agent listener |
 | Decorator over the app's bean | `@Alternative @Priority(100) @ApplicationScoped` producer | tenancy wrappers; `@ApplicationScoped` so a class can declare and inject a store without a creation cycle |
 | Opt-in implementation | own qualifier (`@HybridSearch`) + `@Named` | hybrid retriever; never an unqualified candidate |
+
+Decorating modules stack by priority: tenancy (100) wraps the application's bean, crag (200) wraps
+tenancy. A decorator never selects an alternative that outranks its own as its delegate, or two
+decorators would wrap each other. In Spring the same order comes from post-processor order:
+tenancy runs early (`HIGHEST_PRECEDENCE + 100`), crag late (`LOWEST_PRECEDENCE - 100`).
 
 A decorator producer finds the application's bean with `BeanManager.getBeans` — `Instance`
 resolution would only return the decorator itself — and applies ArC's rules (alternatives, then

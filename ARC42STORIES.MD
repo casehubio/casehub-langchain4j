@@ -426,7 +426,7 @@ flowchart LR
 | 5 | Hybrid Search — SPLADE + Dense + RRF | J2 | 1 | L1, L2, L3 | ✅ |
 | 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
 | 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
-| 8 | CRAG Quality Gating — Hallucination Reduction | J2 | 1 | L1, L2, L3 | 🔲 |
+| 8 | CRAG Quality Gating — Hallucination Reduction | J2 | 1 | L1, L2, L3 | ✅ |
 | 9 | Retrieval Tracking + Analytics | J2 | 1 | L1, L2, L3 | 🔲 |
 | 10 | Eidos Agent Identity + Personality | J3 | 2 | L1, L2, L3 | 🔲 |
 | 11 | Eidos Reputation + Capability Matching | J3 | 2 | L1, L2, L3 | 🔲 |
@@ -604,15 +604,15 @@ Limit how many agents run concurrently — backpressure for LLM API cost control
 
 #### C8 — CRAG Quality Gating: Hallucination Reduction (Phase 1)
 
-**Journey:** J2 | **Sequence:** 8 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 8 of 30 | **Status:** ✅
 
 **What this delivers**
 Corrective RAG — automatically discards low-relevance chunks before the LLM sees them. Uses neocortex's cross-encoder to score chunk relevance and remove noise. Reduces hallucination by preventing the LLM from reasoning over irrelevant context.
 
-**Key classes:** `CragContentFilter` — wraps any ContentRetriever, applies cross-encoder scoring, discards below threshold.
+**Key classes:** `CragContentRetriever` — wraps any ContentRetriever, grades with neocortex's `RelevanceEvaluator` (cross-encoder, ColBERT or custom), drops INCORRECT, puts CORRECT first; `CragRetrievalQuality` event. Composes with tenancy as CRAG(Tenancy(app)). No search expansion (`ContentRetriever` has no result-count parameter). Design: `docs/superpowers/specs/2026-11-20-crag-filter-design.md`.
 
 **Issues**
-- TBD — CRAG gating module (core + quarkus + spring)
+- #17 — CRAG quality filter (core + quarkus + spring)
 
 ---
 

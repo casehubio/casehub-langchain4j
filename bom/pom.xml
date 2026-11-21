@@ -85,6 +85,23 @@
                 <artifactId>casehub-langchain4j-hybrid-search-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <!-- CRAG quality filter -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-crag-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-crag</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-crag-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
