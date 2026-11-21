@@ -295,6 +295,61 @@ LangChain4j's `ContentRetriever` has no way to ask for more, so this module only
 
 **Artifacts:** `casehub-langchain4j-crag` (Quarkus), `casehub-langchain4j-crag-spring` (Spring Boot)
 
+---
+
+### tracking — retrieval tracking and analytics for any retriever
+
+**What it wraps:** your `ContentRetriever` bean, outermost — after tenancy and CRAG, so it records
+what the model actually receives.
+
+**What you get:** every retrieval is recorded into neocortex's `RetrievalTracker` — query text,
+tenant, corpus, and the returned documents with their scores (re-ranked score, else retrieval score,
+else `0.0`). Each returned content carries the retrieval ID in its segment metadata `retrieval_id`,
+and each recorded retrieval is published as neocortex's `RetrievalRecorded` (a CDI event in Quarkus,
+an application event in Spring). Tracking never changes what the retriever returns and never fails a
+retrieval: a tracking error is logged and the retrieval is returned as is.
+
+**You bring the tracker.**
+
+- **Quarkus:** add `io.casehub:casehub-neocortex-rag-tracking` and set
+  `casehub.rag.tracking.sqlite.path` (it has no default; neocortex fails startup without it).
+- **Spring Boot:** declare a `RetrievalTracker` bean — neocortex's `SqliteRetrievalTracker` can only
+  be created by CDI ([#20](https://github.com/casehubio/casehub-langchain4j/issues/20)).
+
+Exactly one tracker; several fail with a clear error.
+
+**Documents are identified by `source_document_id`** in the segment metadata — set it when you
+ingest (`Metadata` on the `Document` or `TextSegment`). Content without it is returned to the model
+but not recorded (one WARN). hybrid-search results already carry it.
+
+```java
+List<Content> contents = retriever.retrieve(Query.from("How do I reset a password?"));
+String retrievalId = contents.get(0).textSegment().metadata().getString("retrieval_id");
+tracker.feedback(retrievalId, "doc-42", RetrievalOutcome.HIGHLY_RELEVANT);
+
+CorpusRef corpus = new CorpusRef("acme", "default");   // tenant, casehub.langchain4j.tracking.corpus
+Map<String, DocumentStats> stats = RetrievalAnalyzer.documentStats(tracker, corpus, since, until);
+List<QueryQualitySignal> zeroHits = RetrievalAnalyzer.zeroHitQueries(tracker, corpus, since, until);
+```
+
+| Situation | Behaviour |
+|---|---|
+| No `RetrievalTracker` bean | Retrievers are not wrapped; an INFO |
+| Several `RetrievalTracker` beans | Clear error (Spring: at startup; Quarkus: when the retriever is first used) |
+| No `CurrentPrincipal` bean | Recorded under tenant `default` (one INFO) |
+| A principal without a tenancy ID | Not recorded (one WARN) — never under another tenant |
+| An empty retrieval | Recorded with no documents — it shows up in `RetrievalAnalyzer.zeroHitQueries` |
+| Content returned but none has `source_document_id` | Not recorded (an empty record would read as a false zero-hit) |
+| Already recorded upstream (`retrieval_id` or neocortex's `_trackingId` on any content) | Not recorded again; `_trackingId` is copied to `retrieval_id` |
+
+**Known limits:** one corpus name (`casehub.langchain4j.tracking.corpus`, default `default`) for
+every wrapped retriever; `maxResults` in the record is the number of contents returned
+(`ContentRetriever` has no requested limit); a missing score is recorded as `0.0`. The hybrid-search
+bean is not wrapped — enable neocortex's own tracking (`casehub.rag.tracking.enabled=true`) to record
+it under the corpora it actually searched.
+
+**Artifacts:** `casehub-langchain4j-tracking` (Quarkus), `casehub-langchain4j-tracking-spring` (Spring Boot)
+
 ## Configuration Reference
 
 | Property | Default | Description |
@@ -302,6 +357,7 @@ LangChain4j's `ContentRetriever` has no way to ask for more, so this module only
 | `casehub.langchain4j.governance.outcome-confidence` | `0.7` | Weight of one agent invocation as trust evidence, in `(0.0, 1.0]`. An invalid value fails startup in Spring, and when the listener is first looked up in Quarkus. |
 | `casehub.langchain4j.hybrid-search.corpora` | — (required to use the retriever) | Comma-separated neocortex corpus names |
 | `casehub.langchain4j.hybrid-search.max-results` | `10` | Most contents one retrieval returns |
+| `casehub.langchain4j.tracking.corpus` | `default` | Corpus name recorded for every tracked retrieval |
 
 audit and tenancy have no configuration.
 
@@ -324,6 +380,7 @@ A missing CaseHub dependency never fails startup.
 | governance | Lineage + trust score + outcomes | Lineage only |
 | hybrid-search | Hybrid retrieval | Clear error on first use — it is an implementation, not a decorator |
 | crag | Graded, filtered retrieval (needs a `RelevanceEvaluator`) | Retrievers left unwrapped, with a WARN |
+| tracking | Recorded retrievals (needs a `RetrievalTracker`) | Retrievers left unwrapped, with an INFO |
 
 ---
 
@@ -334,9 +391,11 @@ A missing CaseHub dependency never fails startup.
   filter accepts them.
 - **tenancy + crag:** CRAG wraps the tenant filter — CRAG(Tenancy(your retriever)) — so other
   tenants' content never reaches the evaluator.
+- **tracking + crag + tenancy:** Tracking(CRAG(Tenancy(your retriever))) — the record holds only the
+  current tenant's content that survived CRAG.
 - **Your own `@Alternative` `ContentRetriever` (Quarkus):** keep its priority below 100. tenancy
-  wraps at 100 and crag at 200; an application alternative above either is injected without that
-  decorator (both modules log a WARN when that happens).
+  wraps at 100, crag at 200 and tracking at 300; an application alternative above any of them is
+  injected without that decorator (each module logs a WARN when that happens).
 - **crag + hybrid-search:** in Spring the hybrid bean is wrapped too; results already graded by
   neocortex's CRAG are passed through, not graded again. In Quarkus only the unqualified retriever
   is wrapped.

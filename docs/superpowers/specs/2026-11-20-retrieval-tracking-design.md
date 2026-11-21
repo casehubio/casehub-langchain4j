@@ -184,7 +184,7 @@ the tenant filter and the CRAG filter, as neocortex orders its own decorators (t
 
 `SqliteRetrievalTracker` cannot be created by Spring. A Spring application declares a
 `RetrievalTracker` bean itself (neocortex's `InMemoryRetrievalTracker` for tests, or its own
-implementation). **TODO** (issue to be created): a Spring-friendly SQLite tracker — upstream in
+implementation). **TODO** (#20): a Spring-friendly SQLite tracker — upstream in
 neocortex (a plain constructor on `SqliteRetrievalTracker`) or a Spring adapter here.
 
 ### Feedback and analytics (consumer guide only)

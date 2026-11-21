@@ -102,6 +102,23 @@
                 <artifactId>casehub-langchain4j-crag-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>
+
+            <!-- Retrieval tracking -->
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
