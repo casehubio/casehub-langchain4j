@@ -41,6 +41,7 @@ class CallFingerprintTest {
     @Test
     void fingerprint_tenantAndToolBoundariesCannotBeShifted() {
         assertThat(fp("ac", "met", "{}")).isNotEqualTo(fp("acm", "et", "{}"));
+        assertThat(fp("a\nb", "c", "{}")).isNotEqualTo(fp("a", "b\nc", "{}"));
     }
 
     @Test

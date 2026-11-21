@@ -38,9 +38,12 @@ public final class CallFingerprint {
 
     private CallFingerprint() {}
 
-    /** Lowercase hex SHA-256 of {@code tenant \n tool \n canonical-JSON(arguments)}. */
+    /**
+     * Lowercase hex SHA-256 of the tenant, tool and canonical-JSON arguments, each prefixed with its
+     * length so no part can shift into its neighbour.
+     */
     public static String of(String tenancyId, String toolName, Map<String, Object> arguments) {
-        String material = tenancyId + "\n" + toolName + "\n" + canonicalJson(arguments);
+        String material = part(tenancyId) + part(toolName) + part(canonicalJson(arguments));
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(material.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
@@ -69,6 +72,11 @@ public final class CallFingerprint {
             throw new IllegalArgumentException("tool arguments must be a JSON object");
         }
         return MAPPER.convertValue(tree, MAP);
+    }
+
+    private static String part(String value) {
+        String text = String.valueOf(value);
+        return text.length() + ":" + text + "\n";
     }
 
     private static String canonicalJson(Map<String, Object> arguments) {

@@ -69,7 +69,7 @@ class GatedToolExecutorTest {
     }
 
     @Test
-    void autonomous_runsTool_withoutApprovalPort() {
+    void autonomous_runsTool() {
         assertThat(call(wrapped(), "balance", "{\"accountId\":\"A1\"}")).isEqualTo("balance of A1 is 100");
         assertThat(tools.balances).hasValue(1);
     }
@@ -354,5 +354,31 @@ class GatedToolExecutorTest {
         assertThat(gatedEvent.actorId()).isEqualTo("agent:treasurer");
         assertThat(gatedEvent.subjectId()).isEqualTo(lineage.subjectIdFor("m1"));
         assertThat(gatedEvent.data().values()).noneMatch(v -> String.valueOf(v).contains("A1"));
+    }
+
+    @Test
+    void riskPortReturnsNull_refusesUnchecked_andAudits() {
+        risk = call -> null;
+
+        assertThat(freeze(wrapped())).startsWith("NOT PERFORMED: ");
+        assertThat(tools.freezes).hasValue(0);
+        assertThat(gated()).singleElement().satisfies(e -> assertThat(e.data()).containsEntry("decision", "unchecked"));
+    }
+
+    @Test
+    void wrap_objectWithoutToolMethods_throws() {
+        OversightToolGate gate = new OversightToolGate(null, approvals, tenant::get, audit, lineage);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> gate.forAgent("treasurer").wrap(new Object()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("@Tool");
+    }
+
+    @Test
+    void wrap_duplicateToolNames_throws() {
+        OversightToolGate gate = new OversightToolGate(null, approvals, tenant::get, audit, lineage);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> gate.forAgent("treasurer").wrap(new AccountTools(), new AccountTools()))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("freezeAccount");
     }
 }
