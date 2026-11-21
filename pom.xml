@@ -34,6 +34,7 @@
         <module>hybrid-search-spring</module>
         <module>crag-core</module>
         <module>crag</module>
+        <module>crag-spring</module>
         <module>bom</module>
         <module>examples</module>
     </modules>
@@ -120,6 +121,16 @@
             <dependency>
                 <groupId>io.casehub.langchain4j</groupId>
                 <artifactId>casehub-langchain4j-crag</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tenancy-spring</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-crag-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
