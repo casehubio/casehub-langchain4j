@@ -103,6 +103,9 @@ final class GatedToolExecutor implements ToolExecutor {
             LOG.warnf(e, "Oversight gate: risk classification failed for tool %s — refused", tool);
             return unchecked(tool, "its risk could not be classified", null);
         }
+        if (verdict == null) {
+            return unchecked(tool, "its risk could not be classified", null);
+        }
         return switch (verdict) {
             case RiskVerdict.Autonomous autonomous -> Decision.run();
             case RiskVerdict.Unroutable unroutable -> unchecked(tool, unroutable.reason(), null);

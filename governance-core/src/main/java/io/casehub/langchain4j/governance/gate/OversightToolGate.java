@@ -8,9 +8,11 @@ import dev.langchain4j.service.tool.ToolExecutor;
 import io.casehub.langchain4j.audit.AuditEntryWriter;
 import io.casehub.langchain4j.audit.CasehubAgentListener;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -71,16 +73,33 @@ public class OversightToolGate {
         }
 
         /** Wraps every {@code @Tool} method of the given objects, as LangChain4j would register them. */
+        /**
+         * Wraps every public {@code @Tool} method of the given objects, as LangChain4j would register
+         * them.
+         *
+         * @throws IllegalArgumentException when an object has no public {@code @Tool} method (for
+         *     example a framework proxy — pass the target object) or two tools share a name
+         */
         public Map<ToolSpecification, ToolExecutor> wrap(Object... toolObjects) {
             Map<ToolSpecification, ToolExecutor> wrapped = new LinkedHashMap<>();
+            Set<String> names = new HashSet<>();
             for (Object tools : toolObjects) {
+                int found = 0;
                 for (Method method : tools.getClass().getMethods()) {
                     if (method.isAnnotationPresent(Tool.class)) {
                         ToolSpecification specification = ToolSpecifications.toolSpecificationFrom(method);
+                        if (!names.add(specification.name())) {
+                            throw new IllegalArgumentException("two tools are named '" + specification.name() + "'");
+                        }
                         GatedAction gated = method.getAnnotation(GatedAction.class);
                         String actionType = gated == null ? specification.name() : gated.value();
                         wrapped.put(specification, executor(new DefaultToolExecutor(tools, method), actionType));
+                        found++;
                     }
+                }
+                if (found == 0) {
+                    throw new IllegalArgumentException(tools.getClass().getName()
+                            + " has no public methods annotated with @Tool (a proxy? pass the target object)");
                 }
             }
             return wrapped;
