@@ -29,18 +29,25 @@
             <groupId>io.casehub.langchain4j</groupId>
             <artifactId>casehub-langchain4j-audit</artifactId>
         </dependency>
+        <!-- Not optional: the producers inject these beans so that ArC keeps class-style beans
+             that nothing else in the application injects. -->
         <dependency>
             <groupId>io.casehub</groupId>
             <artifactId>casehub-ledger-api</artifactId>
-            <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>io.casehub</groupId>
             <artifactId>casehub-platform-api</artifactId>
-            <optional>true</optional>
         </dependency>
 
         <!-- Test -->
+        <dependency>
+            <groupId>io.casehub.langchain4j</groupId>
+            <artifactId>casehub-langchain4j-audit-core</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit</artifactId>

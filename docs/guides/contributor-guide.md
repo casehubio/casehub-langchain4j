@@ -36,34 +36,28 @@ Every Quarkus module activates by classpath presence. No `quarkus.arc.selected-a
 
 ### Optional CaseHub types
 
-Never declare an injection point (field, producer parameter) of a type from an optional
-dependency (`LedgerAppender`, `CurrentPrincipal`, `TrustScoreSource`, …): if the jar is absent,
-startup fails. Check presence by class name, then touch the type only inside a nested holder that
-is loaded after the check, and resolve the bean programmatically:
+**Quarkus modules inject; they never look beans up.** ArC removes beans that no injection point
+uses, and a programmatic lookup (`Arc.container().instance(...)`) is not an injection point —
+`quarkus.arc.unremovable-types` does not help either, because it matches bean *classes*, not the
+interface you look up. A class-style `LedgerAppender` or `@RiskClassifier` bean would vanish and
+the module would silently degrade. So a Quarkus producer takes `Instance<T>` parameters:
 
 ```java
 @Produces @DefaultBean @Singleton
-public AuditEntryWriter auditEntryWriter() {
-    AuditEntryWriter logging = new LoggingAuditEntryWriter();
-    if (isPresent("io.casehub.ledger.api.spi.LedgerAppender")
-            && isPresent("io.casehub.platform.api.identity.CurrentPrincipal")) {
-        AuditEntryWriter ledger = LedgerSupport.create(logging);   // nested static class
-        if (ledger != null) return ledger;
-    }
-    return logging;
-}
-
-private static final class LedgerSupport {
-    static AuditEntryWriter create(AuditEntryWriter fallback) {
-        InstanceHandle<LedgerAppender> appender = Arc.container().instance(LedgerAppender.class);
-        ...
-    }
+public AuditEntryWriter auditEntryWriter(Instance<LedgerAppender> appender, Instance<CurrentPrincipal> principal) {
+    if (appender.isResolvable() && principal.isResolvable()) { ... }
+    return new LoggingAuditEntryWriter();
 }
 ```
 
-ArC cannot see a programmatic lookup, so list the looked-up types in
-`quarkus.arc.unremovable-types` (the audit module ships them in
-`META-INF/microprofile-config.properties`).
+That requires the type on the classpath, so the API jar a Quarkus module injects from is a
+required dependency of that module (`casehub-ledger-api`, `casehub-platform-api`,
+`casehub-engine-api`). `ClassStyle*DiscoveryTest`s prove class-style beans from a dependency jar
+are kept.
+
+**Spring modules** have no unused-bean removal: they may keep API jars optional, check with
+`ClassUtils.isPresent`, touch the types only in a nested holder, and resolve beans through
+`BeanFactory.getBeanProvider(...).getIfAvailable()`.
 
 ### Bean roles
 

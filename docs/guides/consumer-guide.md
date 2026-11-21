@@ -201,10 +201,10 @@ supply the tenant. A missing piece is reported on first use, not at startup.
 
 audit and tenancy have no configuration.
 
-Quarkus only: the audit module sets `quarkus.arc.unremovable-types` so the ledger and identity
-beans it looks up are kept. If your application sets that property itself, include
-`io.casehub.ledger.api.spi.LedgerAppender`, `io.casehub.platform.api.identity.CurrentPrincipal`,
-`io.casehub.ledger.api.spi.TrustScoreSource` and `io.casehub.ledger.api.spi.OutcomeRecorder`.
+Quarkus only: the audit and governance modules inject the ledger and identity beans they use
+(`LedgerAppender`, `CurrentPrincipal`, `TrustScoreSource`, `OutcomeRecorder`), so ArC never removes
+them as unused — no `quarkus.arc.unremovable-types` entries are needed. This makes
+`casehub-ledger-api` and `casehub-platform-api` required dependencies of those two Quarkus modules.
 
 ---
 
