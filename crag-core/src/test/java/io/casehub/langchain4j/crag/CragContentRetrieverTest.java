@@ -80,7 +80,7 @@ class CragContentRetrieverTest {
         List<Content> result = retrieve(List.of(content("good1"), content("maybe1")));
 
         assertThat(grade(result.get(0))).isEqualTo("CORRECT");
-        assertThat(result.get(0).metadata()).containsEntry(ContentMetadata.RERANKED_SCORE, 0.9f);
+        assertThat(result.get(0).metadata()).containsEntry(ContentMetadata.RERANKED_SCORE, (double) 0.9f);
         assertThat(grade(result.get(1))).isEqualTo("AMBIGUOUS");
     }
 
@@ -247,5 +247,35 @@ class CragContentRetrieverTest {
         RetrievalQuality quality = new RetrievalQuality(1, 1, 0, 0, true, false);
 
         assertThat(new CragRetrievalQuality(quality).quality()).isSameAs(quality);
+    }
+
+    @Test
+    void missingScore_isSentAsNaN_notZero() {
+        retrieve(List.of(content("good1")));
+
+        assertThat(evaluator.calls.get(0).get(0).relevanceScore()).isNaN();
+    }
+
+    @Test
+    void fullyGradedListContainingIncorrect_isEvaluated() {
+        retrieve(List.of(
+                Content.from(TextSegment.from("good1", Metadata.from("relevance_grade", "CORRECT"))),
+                Content.from(TextSegment.from("bad1", Metadata.from("relevance_grade", "INCORRECT")))));
+
+        assertThat(evaluator.calls).hasSize(1);
+    }
+
+    @Test
+    void unknownGradeValue_doesNotCountAsGraded() {
+        retrieve(List.of(Content.from(TextSegment.from("good1", Metadata.from("relevance_grade", "PROBABLY")))));
+
+        assertThat(evaluator.calls).hasSize(1);
+    }
+
+    @Test
+    void nonStringGradeValue_doesNotThrow() {
+        retrieve(List.of(Content.from(TextSegment.from("good1", new Metadata().put("relevance_grade", 1)))));
+
+        assertThat(evaluator.calls).hasSize(1);
     }
 }
