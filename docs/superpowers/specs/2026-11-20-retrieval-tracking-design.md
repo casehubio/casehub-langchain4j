@@ -211,7 +211,6 @@ tenant used in `CorpusRef` for analysis.
   `rag-tracking-spring` with `casehub.rag.tracking.enabled=true`).
 - `retrieval_id` in segment metadata makes the same passage from two retrievals unequal, so a
   multi-retrieval pipeline (query expansion, routing) no longer de-duplicates it *(final review)*.
-- Spring needs an application-provided tracker (TODO above).
 
 ## Tests the builder must include
 
