@@ -64,23 +64,9 @@ public class CragBeans {
 
     /** The {@code ContentRetriever} ArC would inject if this module were absent. */
     private ContentRetriever resolvedBean() {
-        List<Bean<?>> candidates = beanManager.getBeans(ContentRetriever.class, Any.Literal.INSTANCE).stream()
+        List<Bean<?>> candidates = narrow(beanManager.getBeans(ContentRetriever.class, Any.Literal.INSTANCE).stream()
                 .filter(b -> b.getBeanClass() != CragBeans.class)
-                .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
-                .filter(b -> !(b.isAlternative() && priority(b) > PRIORITY))
-                .toList();
-        if (candidates.size() > 1) {
-            List<Bean<?>> alternatives = candidates.stream().filter(Bean::isAlternative).toList();
-            if (!alternatives.isEmpty()) {
-                int top = alternatives.stream().mapToInt(CragBeans::priority).max().getAsInt();
-                candidates = alternatives.stream().filter(b -> priority(b) == top).toList();
-            } else {
-                List<Bean<?>> nonDefault = candidates.stream()
-                        .filter(b -> !(b instanceof InjectableBean<?> injectable && injectable.isDefaultBean()))
-                        .toList();
-                candidates = nonDefault.isEmpty() ? candidates : nonDefault;
-            }
-        }
+                .toList());
         if (candidates.isEmpty()) {
             throw new UnsatisfiedResolutionException(
                     "casehub-langchain4j-crag found no ContentRetriever bean to grade — define one, or remove the injection point");
@@ -92,6 +78,37 @@ public class CragBeans {
         Bean<?> bean = candidates.get(0);
         return (ContentRetriever) beanManager.getReference(bean, ContentRetriever.class,
                 beanManager.createCreationalContext(bean));
+    }
+
+    /**
+     * ArC's resolution rules for an unqualified injection, ignoring alternatives that outrank this
+     * module. Copied from {@code TenancyBeans.narrowLikeArc} — keep the two in step.
+     */
+    static List<Bean<?>> narrow(List<Bean<?>> beans) {
+        List<Bean<?>> eligible = beans.stream().filter(b -> !(b.isAlternative() && priority(b) > PRIORITY)).toList();
+        if (eligible.size() < beans.size()) {
+            beans.stream()
+                    .filter(b -> b.isAlternative() && priority(b) > PRIORITY)
+                    .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                    .forEach(b -> LOG.warnf("casehub-langchain4j-crag: the alternative %s (priority %d) outranks the CRAG"
+                            + " filter (priority %d) and is injected without it — keep application alternatives below 100",
+                            b.getBeanClass() == null ? b : b.getBeanClass().getName(), priority(b), PRIORITY));
+        }
+        List<Bean<?>> candidates = eligible.stream()
+                .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                .toList();
+        if (candidates.size() <= 1) {
+            return candidates.isEmpty() ? eligible : candidates;
+        }
+        List<Bean<?>> alternatives = candidates.stream().filter(Bean::isAlternative).toList();
+        if (!alternatives.isEmpty()) {
+            int top = alternatives.stream().mapToInt(CragBeans::priority).max().getAsInt();
+            return alternatives.stream().filter(b -> priority(b) == top).toList();
+        }
+        List<Bean<?>> nonDefault = candidates.stream()
+                .filter(b -> !(b instanceof InjectableBean<?> injectable && injectable.isDefaultBean()))
+                .toList();
+        return nonDefault.isEmpty() ? candidates : nonDefault;
     }
 
     private static int priority(Bean<?> bean) {
