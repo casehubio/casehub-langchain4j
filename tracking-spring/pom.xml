@@ -53,5 +53,10 @@
             <artifactId>casehub-langchain4j-crag-spring</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>io.casehub</groupId>
+            <artifactId>casehub-neocortex-rag-tracking-spring</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

@@ -427,7 +427,7 @@ flowchart LR
 | 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
 | 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
 | 8 | CRAG Quality Gating — Hallucination Reduction | J2 | 1 | L1, L2, L3 | ✅ |
-| 9 | Retrieval Tracking + Analytics | J2 | 1 | L1, L2, L3 | ✅ (Spring needs an app-provided tracker, #20) |
+| 9 | Retrieval Tracking + Analytics | J2 | 1 | L1, L2, L3 | ✅ |
 | 10 | Eidos Agent Identity + Personality | J3 | 2 | L1, L2, L3 | 🔲 |
 | 11 | Eidos Reputation + Capability Matching | J3 | 2 | L1, L2, L3 | 🔲 |
 | 12 | Qhorus Typed Channels | J3 | 2 | L1, L2, L3 | 🔲 |
@@ -623,11 +623,11 @@ Corrective RAG — automatically discards low-relevance chunks before the LLM se
 **What this delivers**
 Every RAG retrieval is recorded with provenance — what was retrieved, for which query, from which corpus. Query clustering, document impact centrality, zero-hit detection. Observability for RAG that LC4j does not provide. Classpath-activated from neocortex's tracking infrastructure.
 
-**Key classes:** `TrackingContentRetriever` — wraps any ContentRetriever, records each retrieval into neocortex's `RetrievalTracker` (documents by `source_document_id`), stamps `retrieval_id` for feedback, publishes `RetrievalRecorded`; never changes or fails a retrieval. Composes as Tracking(CRAG(Tenancy(app))). Analytics: neocortex's `RetrievalAnalyzer` used directly. Tracker: neocortex's `SqliteRetrievalTracker` (Quarkus) or an application bean (Spring). Design: `docs/superpowers/specs/2026-11-20-retrieval-tracking-design.md`.
+**Key classes:** `TrackingContentRetriever` — wraps any ContentRetriever, records each retrieval into neocortex's `RetrievalTracker` (documents by `source_document_id`), stamps `retrieval_id` for feedback, publishes `RetrievalRecorded`; never changes or fails a retrieval. Composes as Tracking(CRAG(Tenancy(app))). Analytics: neocortex's `RetrievalAnalyzer` used directly. Tracker: neocortex's `SqliteRetrievalTracker` (`rag-tracking` in Quarkus, `rag-tracking-spring` in Spring Boot) or an application bean. Design: `docs/superpowers/specs/2026-11-20-retrieval-tracking-design.md`.
 
 **Issues**
 - #19 — retrieval tracking (core + quarkus + spring)
-- #20 — Spring-friendly SQLite tracker
+- #20 — Spring-friendly SQLite tracker ✅ (upstream: neocortex#1200)
 
 ---
 

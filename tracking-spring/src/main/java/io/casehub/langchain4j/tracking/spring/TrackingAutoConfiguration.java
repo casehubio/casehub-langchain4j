@@ -20,14 +20,14 @@ import org.springframework.core.env.Environment;
 /**
  * Wraps every {@link ContentRetriever} bean with a {@link TrackingContentRetriever} when a
  * {@link RetrievalTracker} bean exists; without one, retrievers are left as they are and an INFO is
- * logged. neocortex's {@code SqliteRetrievalTracker} is CDI-only, so a Spring application declares
- * its own tracker bean.
+ * logged. neocortex's {@code casehub-neocortex-rag-tracking-spring} supplies a SQLite tracker
+ * ({@code casehub.rag.tracking.sqlite.path}); an application may declare its own instead.
  *
  * <p>The post-processor runs after CRAG's and tenancy's, so with all three modules the result is
  * Tracking(CRAG(Tenancy(app))). The hybrid-search bean ({@value #HYBRID_BEAN_NAME}) is not wrapped: it
  * searches its own corpora, so recording it under this module's corpus name would split those
- * documents across two names. In Spring its retrievals are therefore not tracked (neocortex's own
- * tracking is CDI-only, see #20). Recorded retrievals are
+ * documents across two names; neocortex's {@code rag-tracking-spring} tracks it instead, under its
+ * own corpora ({@code casehub.rag.tracking.enabled=true}). Recorded retrievals are
  * published as neocortex {@code RetrievalRecorded} application events.
  */
 @AutoConfiguration
