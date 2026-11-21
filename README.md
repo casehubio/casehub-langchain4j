@@ -13,6 +13,7 @@ enterprise concern that langchain4j deliberately does not handle.
 | **tenancy** | Tenant isolation on any store or retriever | Add dependency |
 | **governance** | Trust scores and outcome recording on top of the agent lineage | Add dependency, attach one listener |
 | **hybrid-search** | SPLADE + dense + RRF hybrid retrieval ([langchain4j#4087](https://github.com/langchain4j/langchain4j/issues/4087)) | Inject one named bean |
+| **crag** | Corrective RAG: grades retrieved content, drops irrelevant chunks before the LLM sees them | Add dependency + a `RelevanceEvaluator` |
 
 Each module group has three variants: `-core` (pure Java), bare name (Quarkus CDI), `-spring` (Spring auto-config).
 
