@@ -379,6 +379,7 @@ class GatedToolExecutorTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> gate.forAgent("treasurer").wrap(new AccountTools(), new AccountTools()))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("freezeAccount");
+                // Reflection does not order methods, so any of AccountTools' tool names may be reported first.
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("two tools are named");
     }
 }
