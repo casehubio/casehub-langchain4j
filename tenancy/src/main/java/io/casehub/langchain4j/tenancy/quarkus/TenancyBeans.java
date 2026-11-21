@@ -23,6 +23,7 @@ import jakarta.enterprise.inject.spi.Bean;
 import jakarta.enterprise.inject.spi.BeanManager;
 import jakarta.enterprise.util.TypeLiteral;
 import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,6 +50,8 @@ public class TenancyBeans {
 
     /** This module's alternative priority; decorating modules that wrap tenancy use a higher one. */
     public static final int PRIORITY = 100;
+
+    private static final Logger LOG = Logger.getLogger(TenancyBeans.class);
 
     @Inject
     BeanManager beanManager;
@@ -119,15 +122,21 @@ public class TenancyBeans {
      * there: only {@code @Default} beans are unqualified candidates; enabled alternatives win, the
      * highest priority first; {@code @DefaultBean}s lose to any other bean.
      */
-    private static List<Bean<?>> narrowLikeArc(List<Bean<?>> beans) {
+    static List<Bean<?>> narrowLikeArc(List<Bean<?>> beans) {
         // A decorating alternative that outranks this module's own (for example crag at 200) wraps
         // tenancy, never the reverse: choosing it as the delegate would make the two wrap each other.
-        List<Bean<?>> candidates = beans.stream()
-                .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+        // Keep this in step with CragBeans.narrow — the crag module copies these rules.
+        List<Bean<?>> eligible = beans.stream()
                 .filter(b -> !(b.isAlternative() && priority(b) > PRIORITY))
                 .toList();
+        if (eligible.size() < beans.size()) {
+            warnIfApplicationOutranks(beans);
+        }
+        List<Bean<?>> candidates = eligible.stream()
+                .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                .toList();
         if (candidates.size() <= 1) {
-            return candidates.isEmpty() ? beans : candidates;
+            return candidates.isEmpty() ? eligible : candidates;
         }
         List<Bean<?>> alternatives = candidates.stream().filter(Bean::isAlternative).toList();
         if (!alternatives.isEmpty()) {
@@ -138,6 +147,20 @@ public class TenancyBeans {
                 .filter(b -> !(b instanceof InjectableBean<?> injectable && injectable.isDefaultBean()))
                 .toList();
         return nonDefaultBeans.isEmpty() ? candidates : nonDefaultBeans;
+    }
+
+    /**
+     * An outranking {@code @Default} alternative that is not one of this library's decorators is the
+     * application's own bean: ArC injects it directly, so tenant isolation does not apply to it.
+     */
+    private static void warnIfApplicationOutranks(List<Bean<?>> beans) {
+        beans.stream()
+                .filter(b -> b.isAlternative() && priority(b) > PRIORITY)
+                .filter(b -> b.getBeanClass() == null || !b.getBeanClass().getName().startsWith("io.casehub.langchain4j."))
+                .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                .forEach(b -> LOG.warnf("casehub-langchain4j-tenancy: the alternative %s (priority %d) outranks tenant"
+                        + " isolation (priority %d) and is injected without it — keep application alternatives below %d",
+                        b.getBeanClass() == null ? b : b.getBeanClass().getName(), priority(b), PRIORITY, PRIORITY));
     }
 
     private static int priority(Bean<?> bean) {
