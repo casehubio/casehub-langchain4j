@@ -207,14 +207,18 @@ INCORRECT by neocortex's `RelevanceEvaluator`:
 - each retrieval publishes a `CragRetrievalQuality` event (a CDI event in Quarkus, an application
   event in Spring) with the counts per grade.
 
-**You bring the evaluator.** Add neocortex's `casehub-neocortex-rag-crossencoder` (cross-encoder or
-ColBERT grading) or define your own `RelevanceEvaluator` bean. Thresholds belong to the evaluator and
-must be calibrated for its model.
+**You bring the evaluator.** Add neocortex's `casehub-neocortex-rag-crossencoder` or define your own
+`RelevanceEvaluator` bean — exactly one; several fail with a clear error. Thresholds belong to the
+evaluator and must be calibrated for its model. The cross-encoder evaluator reads the content
+text and works with any retriever. The ColBERT evaluator grades only from the retriever's
+`ContentMetadata.SCORE`, so it is meaningful only when that score is a ColBERT score; content
+without a score is sent with a NaN score and comes back AMBIGUOUS (kept).
 
 | Situation | Behaviour |
 |---|---|
-| No `RelevanceEvaluator` bean | Retrievers are not wrapped; a WARN at startup |
-| Every content already carries a grade (e.g. hybrid-search behind neocortex's CRAG) | Returned untouched, not graded twice |
+| No `RelevanceEvaluator` bean | Retrievers are not wrapped; a WARN (Spring: per retriever bean at startup; Quarkus: when the retriever is first used) |
+| Several `RelevanceEvaluator` beans | Clear error (Spring: at startup; Quarkus: when the retriever is first used) |
+| Every content already carries CORRECT or AMBIGUOUS (e.g. hybrid-search behind neocortex's CRAG) | Returned untouched, not graded twice |
 | The evaluator fails or returns a malformed answer | Content returned **unfiltered**, each marked `relevance_grade = UNGRADED`; a WARN; the quality event has `evaluated = false` |
 
 **No search expansion.** neocortex's own CRAG asks for more results when too few survive;
@@ -249,7 +253,7 @@ A missing CaseHub dependency never fails startup.
 | tenancy | Tenant-isolated stores | Passes through unchanged (no `CurrentPrincipal` bean) |
 | governance | Lineage + trust score + outcomes | Lineage only |
 | hybrid-search | Hybrid retrieval | Clear error on first use — it is an implementation, not a decorator |
-| crag | Graded, filtered retrieval (needs a `RelevanceEvaluator`) | Retrievers left unwrapped, WARN at startup |
+| crag | Graded, filtered retrieval (needs a `RelevanceEvaluator`) | Retrievers left unwrapped, with a WARN |
 
 ---
 
@@ -260,6 +264,9 @@ A missing CaseHub dependency never fails startup.
   filter accepts them.
 - **tenancy + crag:** CRAG wraps the tenant filter — CRAG(Tenancy(your retriever)) — so other
   tenants' content never reaches the evaluator.
+- **Your own `@Alternative` `ContentRetriever` (Quarkus):** keep its priority below 100. tenancy
+  wraps at 100 and crag at 200; an application alternative above either is injected without that
+  decorator (both modules log a WARN when that happens).
 - **crag + hybrid-search:** in Spring the hybrid bean is wrapped too; results already graded by
   neocortex's CRAG are passed through, not graded again. In Quarkus only the unqualified retriever
   is wrapped.
