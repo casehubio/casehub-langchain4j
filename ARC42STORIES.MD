@@ -339,7 +339,7 @@ Any module beyond Phase 1 requires documented justification in its README:
 | Journey | Phase | Description | Chapters | Status |
 |---|---|---|---|---|
 | J1: Foundation | — | Scaffold, CI, BOM, workspace, docs | C1 | ✅ |
-| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🚧 C2–C5 done |
+| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🚧 C2–C5, C8, C9 done |
 | J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, agency attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
 | J4: Enterprise Infrastructure | 3 | CBR memory, SPLADE embedding, corpus ingestion, temporal scoring | C19–C22 | 🔲 |
 | J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, agency patterns + protocols + prompt optimisation, full integration guide | C23–C30 | 🔲 |
@@ -427,7 +427,7 @@ flowchart LR
 | 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
 | 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
 | 8 | CRAG Quality Gating — Hallucination Reduction | J2 | 1 | L1, L2, L3 | ✅ |
-| 9 | Retrieval Tracking + Analytics | J2 | 1 | L1, L2, L3 | 🔲 |
+| 9 | Retrieval Tracking + Analytics | J2 | 1 | L1, L2, L3 | ✅ (Spring needs an app-provided tracker, #20) |
 | 10 | Eidos Agent Identity + Personality | J3 | 2 | L1, L2, L3 | 🔲 |
 | 11 | Eidos Reputation + Capability Matching | J3 | 2 | L1, L2, L3 | 🔲 |
 | 12 | Qhorus Typed Channels | J3 | 2 | L1, L2, L3 | 🔲 |
@@ -618,15 +618,16 @@ Corrective RAG — automatically discards low-relevance chunks before the LLM se
 
 #### C9 — Retrieval Tracking + Analytics (Phase 1)
 
-**Journey:** J2 | **Sequence:** 9 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 9 of 30 | **Status:** ✅
 
 **What this delivers**
 Every RAG retrieval is recorded with provenance — what was retrieved, for which query, from which corpus. Query clustering, document impact centrality, zero-hit detection. Observability for RAG that LC4j does not provide. Classpath-activated from neocortex's tracking infrastructure.
 
-**Key classes:** `TrackingContentRetriever` (decorator), `RetrievalAnalyzer`, `SqliteRetrievalTracker`.
+**Key classes:** `TrackingContentRetriever` — wraps any ContentRetriever, records each retrieval into neocortex's `RetrievalTracker` (documents by `source_document_id`), stamps `retrieval_id` for feedback, publishes `RetrievalRecorded`; never changes or fails a retrieval. Composes as Tracking(CRAG(Tenancy(app))). Analytics: neocortex's `RetrievalAnalyzer` used directly. Tracker: neocortex's `SqliteRetrievalTracker` (Quarkus) or an application bean (Spring). Design: `docs/superpowers/specs/2026-11-20-retrieval-tracking-design.md`.
 
 **Issues**
-- TBD — retrieval tracking decorator module
+- #19 — retrieval tracking (core + quarkus + spring)
+- #20 — Spring-friendly SQLite tracker
 
 ---
 
