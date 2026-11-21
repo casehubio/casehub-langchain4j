@@ -89,6 +89,8 @@ public class CragBeans {
         if (eligible.size() < beans.size()) {
             beans.stream()
                     .filter(b -> b.isAlternative() && priority(b) > PRIORITY)
+                    // This library's own outer decorators (tracking at 300) wrap CRAG by design.
+                    .filter(b -> b.getBeanClass() == null || !b.getBeanClass().getName().startsWith("io.casehub.langchain4j."))
                     .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
                     .forEach(b -> LOG.warnf("casehub-langchain4j-crag: the alternative %s (priority %d) outranks the CRAG"
                             + " filter (priority %d) and is injected without it — keep application alternatives below 100",
