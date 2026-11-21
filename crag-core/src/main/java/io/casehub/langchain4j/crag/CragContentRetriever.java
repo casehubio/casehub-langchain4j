@@ -98,10 +98,15 @@ public class CragContentRetriever implements ContentRetriever {
         return result;
     }
 
+    /**
+     * Graded upstream only when every item carries CORRECT or AMBIGUOUS — a list holding INCORRECT,
+     * UNGRADED, an unknown value or a stale grade is evaluated again.
+     */
     private static boolean alreadyGraded(List<Content> contents) {
         for (Content content : contents) {
-            String grade = content.textSegment() == null ? null : content.textSegment().metadata().getString(GRADE_KEY);
-            if (grade == null || grade.equals(RelevanceGrade.UNGRADED.name())) {
+            Object grade = content.textSegment() == null ? null : content.textSegment().metadata().toMap().get(GRADE_KEY);
+            String value = String.valueOf(grade);
+            if (!value.equals(RelevanceGrade.CORRECT.name()) && !value.equals(RelevanceGrade.AMBIGUOUS.name())) {
                 return false;
             }
         }
@@ -126,7 +131,9 @@ public class CragContentRetriever implements ContentRetriever {
         segment.metadata().toMap().forEach((key, value) -> metadata.put(key, String.valueOf(value)));
         String sourceDocumentId = metadata.getOrDefault(SOURCE_DOCUMENT_ID, "content-" + index);
         Object score = content.metadata().get(ContentMetadata.SCORE);
-        double relevanceScore = score instanceof Number number ? number.doubleValue() : 0.0;
+        // NaN, not 0.0: a score-based evaluator (neocortex's ColBERT one) would grade a missing score
+        // of 0.0 as INCORRECT and empty every retrieval from a retriever that reports no score.
+        double relevanceScore = score instanceof Number number ? number.doubleValue() : Double.NaN;
         return new RetrievedChunk(segment.text(), sourceDocumentId, relevanceScore, metadata);
     }
 
@@ -135,7 +142,7 @@ public class CragContentRetriever implements ContentRetriever {
         Metadata metadata = segment.metadata().copy().put(GRADE_KEY, grade.name());
         Map<ContentMetadata, Object> contentMetadata = new LinkedHashMap<>(content.metadata());
         if (Float.isFinite(score)) {
-            contentMetadata.put(ContentMetadata.RERANKED_SCORE, score);
+            contentMetadata.put(ContentMetadata.RERANKED_SCORE, (double) score);  // LangChain4j stores Double
         }
         return Content.from(TextSegment.from(segment.text(), metadata), contentMetadata);
     }
