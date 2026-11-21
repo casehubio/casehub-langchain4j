@@ -73,14 +73,23 @@ public class TrackingBeans {
 
     /** Tenant per retrieval: the principal's tenancy ID (blank → {@code null}, not recorded), else {@value #DEFAULT_TENANT}. */
     static Supplier<String> tenant(Instance<CurrentPrincipal> principal) {
+        if (principal.isAmbiguous()) {
+            // Never fall back to "default" here: that would record every tenant's retrievals together.
+            throw new AmbiguousResolutionException("casehub-langchain4j-tracking found several CurrentPrincipal beans"
+                    + " and cannot tell which one supplies the tenant — keep one, or mark one as the alternative"
+                    + " with the highest priority");
+        }
         if (!principal.isResolvable()) {
             LOG.infof("casehub-langchain4j-tracking: no CurrentPrincipal bean — retrievals are recorded under tenant"
                     + " '%s'", DEFAULT_TENANT);
             return () -> DEFAULT_TENANT;
         }
+        // Resolved once, as tenancy does: a normal-scoped principal is a client proxy read per call, and a
+        // @Dependent one is not re-created (and leaked) on every retrieval.
+        CurrentPrincipal current = principal.get();
         AtomicBoolean warned = new AtomicBoolean();
         return () -> {
-            String tenant = principal.get().tenancyId();
+            String tenant = current.tenancyId();
             if ((tenant == null || tenant.isBlank()) && warned.compareAndSet(false, true)) {
                 LOG.warn("casehub-langchain4j-tracking: CurrentPrincipal has no tenancyId — the retrieval is not"
                         + " recorded (never recorded under another tenant)");

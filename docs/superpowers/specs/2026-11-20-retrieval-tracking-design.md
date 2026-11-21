@@ -176,8 +176,9 @@ the tenant filter and the CRAG filter, as neocortex orders its own decorators (t
 - **The hybrid-search bean is not wrapped** *(my call, builder-check finding)*: it searches the
   corpora named in its own configuration, and recording it here under
   `casehub.langchain4j.tracking.corpus` would split one corpus's documents across two names in the
-  analysis. Its retrievals are tracked by neocortex itself (`casehub.rag.tracking.enabled=true`),
-  under the right corpora. Spring's post-processor skips the `casehubHybridRetriever` bean; Quarkus
+  analysis. In Quarkus its retrievals can be tracked by neocortex itself
+  (`casehub.rag.tracking.enabled=true`), under the right corpora; in Spring they are not tracked
+  (neocortex's tracking is a CDI decorator — #20) *(final-review correction)*. Spring's post-processor skips the `casehubHybridRetriever` bean; Quarkus
   wraps only the unqualified retriever, which the qualified hybrid bean never is.
 
 ### Spring tracker
@@ -207,7 +208,9 @@ tenant used in `CorpusRef` for analysis.
 - `maxResults` is the returned count, not the requested limit.
 - A missing score is recorded as `0.0` (the SQLite schema rejects NaN).
 - A non-empty retrieval in which no content has `source_document_id` is not recorded.
-- Hybrid-search retrievals are tracked only through neocortex's own tracking.
+- Hybrid-search retrievals are tracked only through neocortex's own tracking (Quarkus only).
+- `retrieval_id` in segment metadata makes the same passage from two retrievals unequal, so a
+  multi-retrieval pipeline (query expansion, routing) no longer de-duplicates it *(final review)*.
 - Spring needs an application-provided tracker (TODO above).
 
 ## Tests the builder must include

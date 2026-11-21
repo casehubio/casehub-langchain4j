@@ -345,8 +345,16 @@ List<QueryQualitySignal> zeroHits = RetrievalAnalyzer.zeroHitQueries(tracker, co
 **Known limits:** one corpus name (`casehub.langchain4j.tracking.corpus`, default `default`) for
 every wrapped retriever; `maxResults` in the record is the number of contents returned
 (`ContentRetriever` has no requested limit); a missing score is recorded as `0.0`. The hybrid-search
-bean is not wrapped — enable neocortex's own tracking (`casehub.rag.tracking.enabled=true`) to record
-it under the corpora it actually searched.
+bean is not wrapped, because it searches its own corpora: in Quarkus, neocortex's own tracking
+(`casehub.rag.tracking.enabled=true` with `casehub-neocortex-rag-tracking`) records it under the
+corpora it actually searched; **in Spring Boot hybrid-search retrievals are not tracked** (neocortex's
+tracking is a CDI decorator — see [#20](https://github.com/casehubio/casehub-langchain4j/issues/20)).
+
+**Stamping and de-duplication.** `retrieval_id` is part of the segment metadata, and LangChain4j
+compares contents including their metadata. In a pipeline that retrieves several times per question
+(a query-expanding transformer or a query router with `DefaultContentAggregator`), the same passage
+from two retrievals carries two retrieval IDs and is no longer merged: the model can receive it more
+than once. A single retrieval per question is unaffected.
 
 **Artifacts:** `casehub-langchain4j-tracking` (Quarkus), `casehub-langchain4j-tracking-spring` (Spring Boot)
 
