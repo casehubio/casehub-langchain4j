@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -227,5 +228,67 @@ class OversightToolGateAutoConfigurationTest {
                     .run(context -> assertThat(context).getFailure().rootCause()
                             .hasMessageContaining(GovernanceAutoConfiguration.WORK_URL));
         }
+    }
+
+    @Test
+    void urlWithoutCasehubWorkApi_failsStartup() {
+        runner.withUserConfiguration(ClassifierConfig.class)
+                .withClassLoader(new FilteredClassLoader(WorkItemApi.class))
+                .withPropertyValues(GovernanceAutoConfiguration.WORK_URL + "=http://127.0.0.1:1",
+                        GovernanceAutoConfiguration.WORK_TOKEN + "=t", GovernanceAutoConfiguration.WORK_TENANCY + "=acme")
+                .run(context -> assertThat(context).getFailure().rootCause()
+                        .hasMessageContaining(GovernanceAutoConfiguration.WORK_URL)
+                        .hasMessageContaining("casehub-work-api"));
+    }
+
+    /** Warnings {@link GovernanceAutoConfiguration} logs while {@code action} runs. */
+    private static java.util.List<String> warningsDuring(Runnable action) {
+        java.util.logging.Logger logger = java.util.logging.Logger.getLogger(GovernanceAutoConfiguration.class.getName());
+        java.util.List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Handler handler = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                if (record.getLevel().intValue() >= java.util.logging.Level.WARNING.intValue()) {
+                    messages.add(record.getParameters() == null ? record.getMessage()
+                            : java.text.MessageFormat.format(record.getMessage(), record.getParameters()));
+                }
+            }
+
+            @Override
+            public void flush() {}
+
+            @Override
+            public void close() {}
+        };
+        logger.addHandler(handler);
+        try {
+            action.run();
+        } finally {
+            logger.removeHandler(handler);
+        }
+        return messages;
+    }
+
+    @Test
+    void plainHttpToRemoteHost_warns() {
+        java.util.List<String> warnings = warningsDuring(() -> runner.withUserConfiguration(ClassifierConfig.class)
+                .withPropertyValues(GovernanceAutoConfiguration.WORK_URL + "=http://work.example.com:8080",
+                        GovernanceAutoConfiguration.WORK_TOKEN + "=t", GovernanceAutoConfiguration.WORK_TENANCY + "=acme")
+                .run(context -> assertThat(context).hasNotFailed()));
+        assertThat(warnings).anySatisfy(w -> assertThat(w).contains("unencrypted").contains("work.example.com"));
+    }
+
+    @Test
+    void plainHttpToLoopbackOrHttps_doesNotWarn() {
+        java.util.List<String> warnings = warningsDuring(() -> {
+        for (String url : new String[] {"http://127.0.0.1:1", "http://localhost:1", "http://[::1]:1",
+                "https://work.example.com"}) {
+            runner.withUserConfiguration(ClassifierConfig.class)
+                    .withPropertyValues(GovernanceAutoConfiguration.WORK_URL + "=" + url,
+                            GovernanceAutoConfiguration.WORK_TOKEN + "=t", GovernanceAutoConfiguration.WORK_TENANCY + "=acme")
+                    .run(context -> assertThat(context).hasNotFailed());
+        }
+        });
+        assertThat(warnings).noneSatisfy(w -> assertThat(w).contains("unencrypted"));
     }
 }
