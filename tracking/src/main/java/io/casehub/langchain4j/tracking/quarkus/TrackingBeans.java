@@ -1,13 +1,16 @@
 package io.casehub.langchain4j.tracking.quarkus;
 
+import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import io.casehub.langchain4j.tracking.TrackingContentRetriever;
+import io.casehub.langchain4j.tracking.TrackingRetrievalAugmentor;
 import io.casehub.neocortex.rag.RetrievalRecorded;
 import io.casehub.neocortex.rag.RetrievalTracker;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.quarkus.arc.InjectableBean;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
@@ -48,6 +51,18 @@ public class TrackingBeans {
     @Inject
     BeanManager beanManager;
 
+    @Inject
+    Instance<RetrievalTracker> trackers;
+
+    @Inject
+    Instance<CurrentPrincipal> principals;
+
+    @Inject
+    Event<RetrievalRecorded> recordedEvents;
+
+    @ConfigProperty(name = "casehub.langchain4j.tracking.corpus", defaultValue = "default")
+    String corpusName;
+
     // keepAlive is not read: it is the injection point that keeps the application's retriever beans.
     @Produces
     @Alternative
@@ -56,7 +71,11 @@ public class TrackingBeans {
     public ContentRetriever trackingContentRetriever(@Any Instance<ContentRetriever> keepAlive,
             Instance<RetrievalTracker> tracker, Instance<CurrentPrincipal> principal, Event<RetrievalRecorded> recorded,
             @ConfigProperty(name = "casehub.langchain4j.tracking.corpus", defaultValue = "default") String corpus) {
-        ContentRetriever delegate = resolvedBean();
+        ContentRetriever delegate = resolvedBean(ContentRetriever.class);
+        if (delegate == null) {
+            throw new UnsatisfiedResolutionException(
+                    "casehub-langchain4j-tracking found no ContentRetriever bean to track — define one, or remove the injection point");
+        }
         if (tracker.isAmbiguous()) {
             throw new AmbiguousResolutionException("casehub-langchain4j-tracking found several RetrievalTracker beans"
                     + " and cannot tell which one records retrievals — keep one, or mark one as the alternative"
@@ -69,6 +88,43 @@ public class TrackingBeans {
             return delegate;
         }
         return new TrackingContentRetriever(delegate, tracker.get(), corpus, tenant(principal), recorded::fire);
+    }
+
+    /**
+     * Makes quarkus-langchain4j's default augmentor lookup (a {@link RetrievalAugmentor} bean, if one
+     * exists) get a {@link TrackingRetrievalAugmentor} around the application's augmentor bean: one
+     * record per question, also when the augmentor rewrites queries.
+     *
+     * <p>{@code @Dependent} so that it can return {@code null}: this producer exists whether or not
+     * the application has an augmentor, and without one the AI service must get none, as it would
+     * without this module.
+     */
+    // keepAlive is not read: it is the injection point that keeps the application's augmentor beans.
+    @Produces
+    @Alternative
+    @Priority(PRIORITY)
+    @Dependent
+    public RetrievalAugmentor trackingRetrievalAugmentor(@Any Instance<RetrievalAugmentor> keepAlive) {
+        RetrievalAugmentor delegate = resolvedBean(RetrievalAugmentor.class);
+        return delegate == null ? null : track(delegate);
+    }
+
+    /** The augmentor wrapped for tracking, or as is when there is no tracker or it is already wrapped. */
+    RetrievalAugmentor track(RetrievalAugmentor delegate) {
+        if (delegate instanceof TrackingRetrievalAugmentor) {
+            return delegate;
+        }
+        if (trackers.isAmbiguous()) {
+            throw new AmbiguousResolutionException("casehub-langchain4j-tracking found several RetrievalTracker beans"
+                    + " and cannot tell which one records retrievals — keep one, or mark one as the alternative"
+                    + " with the highest priority");
+        }
+        if (!trackers.isResolvable()) {
+            LOG.info("casehub-langchain4j-tracking: no RetrievalTracker bean — the retrieval augmentor is not tracked");
+            return delegate;
+        }
+        return new TrackingRetrievalAugmentor(delegate, trackers.get(), corpusName, tenant(principals),
+                recordedEvents::fire);
     }
 
     /** Tenant per retrieval: the principal's tenancy ID (blank → {@code null}, not recorded), else {@value #DEFAULT_TENANT}. */
@@ -98,22 +154,20 @@ public class TrackingBeans {
         };
     }
 
-    /** The {@code ContentRetriever} ArC would inject if this module were absent. */
-    private ContentRetriever resolvedBean() {
-        List<Bean<?>> candidates = narrow(beanManager.getBeans(ContentRetriever.class, Any.Literal.INSTANCE).stream()
+    /** The bean of {@code type} ArC would inject if this module were absent; {@code null} if there is none. */
+    private <T> T resolvedBean(Class<T> type) {
+        List<Bean<?>> candidates = narrow(beanManager.getBeans(type, Any.Literal.INSTANCE).stream()
                 .filter(b -> b.getBeanClass() != TrackingBeans.class)
                 .toList());
         if (candidates.isEmpty()) {
-            throw new UnsatisfiedResolutionException(
-                    "casehub-langchain4j-tracking found no ContentRetriever bean to track — define one, or remove the injection point");
+            return null;
         }
         if (candidates.size() > 1) {
-            throw new AmbiguousResolutionException("casehub-langchain4j-tracking found " + candidates.size()
-                    + " ContentRetriever beans and cannot tell which one an unqualified injection means");
+            throw new AmbiguousResolutionException("casehub-langchain4j-tracking found " + candidates.size() + " "
+                    + type.getSimpleName() + " beans and cannot tell which one an unqualified injection means");
         }
         Bean<?> bean = candidates.get(0);
-        return (ContentRetriever) beanManager.getReference(bean, ContentRetriever.class,
-                beanManager.createCreationalContext(bean));
+        return type.cast(beanManager.getReference(bean, type, beanManager.createCreationalContext(bean)));
     }
 
     /**
