@@ -7,10 +7,7 @@ import io.casehub.work.api.WorkItemCreateRequest;
 import io.casehub.work.api.WorkItemLabelRequest;
 import io.casehub.work.api.WorkItemStatus;
 import io.casehub.work.api.spi.WorkItemApi;
-import io.casehub.work.api.view.WorkItemPage;
-import io.casehub.work.api.view.WorkItemView;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -39,41 +36,31 @@ public class WorkItemApprovalPort implements ApprovalPort {
     public static final String APPLIED_BY = "system:casehub-langchain4j";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final int PAGE = 50;
+    private final WorkItemGateway gateway;
 
-    private final WorkItemApi api;
-
+    /** In-process: over the casehub-work {@link WorkItemApi} bean. */
     public WorkItemApprovalPort(WorkItemApi api) {
-        this.api = Objects.requireNonNull(api, "api required");
+        this(new WorkItemApiGateway(api));
+    }
+
+    /** Over any {@link WorkItemGateway} — in-process or a remote casehub-work service. */
+    public WorkItemApprovalPort(WorkItemGateway gateway) {
+        this.gateway = Objects.requireNonNull(gateway, "gateway required");
     }
 
     /**
-     * Reads every page (the store returns label matches in no particular order) and keeps only
+     * Reads every matching request (the store returns label matches in no particular order) and keeps only
      * requests this gate created for this exact call: matching {@code callerRef} and an
      * {@code agent:} creator. A label alone is not trusted — labels can be added by anyone who can
      * edit a WorkItem.
      */
     @Override
     public Optional<ApprovalRequest> latest(String tenancyId, String fingerprint) {
-        String label = LABEL_PREFIX + fingerprint;
         String callerRef = CALLER_REF_PREFIX + fingerprint;
-        List<WorkItemView> genuine = new ArrayList<>();
-        int offset = 0;
-        while (true) {
-            WorkItemPage page = api.listAll(null, null, label, null, tenancyId, offset, PAGE);
-            for (WorkItemView item : page.items()) {
-                if (callerRef.equals(item.callerRef()) && item.createdBy() != null
-                        && item.createdBy().startsWith("agent:")) {
-                    genuine.add(item);
-                }
-            }
-            if (!page.hasMore() || page.items().isEmpty()) {
-                break;
-            }
-            offset += page.items().size();
-        }
-        return genuine.stream()
-                .max(Comparator.comparing(WorkItemView::createdAt, Comparator.nullsFirst(Comparator.naturalOrder())))
+        return gateway.findByLabel(LABEL_PREFIX + fingerprint, tenancyId).stream()
+                .filter(item -> callerRef.equals(item.callerRef()) && item.createdBy() != null
+                        && item.createdBy().startsWith("agent:"))
+                .max(Comparator.comparing(GateItem::createdAt, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .map(WorkItemApprovalPort::toRequest);
     }
 
@@ -91,17 +78,16 @@ public class WorkItemApprovalPort implements ApprovalPort {
                 .callerRef(CALLER_REF_PREFIX + fingerprint)
                 .labels(List.of(new WorkItemLabelRequest(LABEL_PREFIX + fingerprint, LabelPersistence.MANUAL, APPLIED_BY)))
                 .build();
-        return toRequest(api.create(request, call.tenancyId()));
+        return toRequest(gateway.create(request, call.tenancyId()));
     }
 
     @Override
     public void markUsed(ApprovalRequest request, String tenancyId) {
-        api.addLabel(request.id(), USED_LABEL, APPLIED_BY, tenancyId);
+        gateway.addLabel(request.id(), USED_LABEL, APPLIED_BY, tenancyId);
     }
 
-    private static ApprovalRequest toRequest(WorkItemView item) {
-        boolean used = item.labels() != null
-                && item.labels().stream().anyMatch(label -> USED_LABEL.equals(label.path()));
+    private static ApprovalRequest toRequest(GateItem item) {
+        boolean used = item.labels().contains(USED_LABEL);
         Set<String> groups = item.candidateGroups() == null || item.candidateGroups().isBlank()
                 ? Set.of()
                 : Arrays.stream(item.candidateGroups().split(",")).map(String::trim).filter(g -> !g.isEmpty())
