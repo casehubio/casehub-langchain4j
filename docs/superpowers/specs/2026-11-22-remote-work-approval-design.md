@@ -44,8 +44,9 @@ Package `io.casehub.langchain4j.governance.gate`.
 - **`WorkItemApprovalPort`** keeps its public constructor `(WorkItemApi)`, which delegates to a
   new constructor `(WorkItemGateway)`. The genuineness filter (callerRef plus an `agent:`
   creator), the newest-wins choice, the status mapping and the payload are unchanged.
-- **`HttpWorkItemGateway`** uses the JDK `HttpClient` and Jackson (with `JavaTimeModule` and
-  unknown properties ignored).
+- **`HttpWorkItemGateway`** uses the JDK `HttpClient` and Jackson (ISO-8601 `Instant`s through a small
+  module of its own, no jsr310 dependency; unknown properties ignored). It stops with
+  `WorkItemGatewayException` after 200 pages that still report `hasMore`.
   - Constructor `(URI baseUrl, WorkTokenProvider tokens, Duration timeout)`.
   - Paths are resolved under `<baseUrl>/api/work/items/`.
   - Each request sends `Authorization: Bearer <token>`, where the token comes from

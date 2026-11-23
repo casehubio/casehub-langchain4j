@@ -217,4 +217,15 @@ class OversightToolGateAutoConfigurationTest {
                     });
         }
     }
+
+    @Test
+    void urlWithoutSchemeOrHost_failsStartup() {
+        for (String url : new String[] {"localhost:8080", "ftp://work.example.com", "http:///nohost"}) {
+            runner.withUserConfiguration(ClassifierConfig.class)
+                    .withPropertyValues(GovernanceAutoConfiguration.WORK_URL + "=" + url,
+                            GovernanceAutoConfiguration.WORK_TOKEN + "=t", GovernanceAutoConfiguration.WORK_TENANCY + "=acme")
+                    .run(context -> assertThat(context).getFailure().rootCause()
+                            .hasMessageContaining(GovernanceAutoConfiguration.WORK_URL));
+        }
+    }
 }

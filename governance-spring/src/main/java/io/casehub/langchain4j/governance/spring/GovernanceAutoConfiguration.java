@@ -154,7 +154,7 @@ public class GovernanceAutoConfiguration {
             if (url == null || url.isBlank()) {
                 return null;
             }
-            URI base = URI.create(url.trim());
+            URI base = remoteUrl(url.trim());
             WorkTokenProvider tokens = beanFactory.getBeanProvider(WorkTokenProvider.class).getIfAvailable();
             if (tokens == null) {
                 String token = environment.getProperty(WORK_TOKEN);
@@ -169,6 +169,20 @@ public class GovernanceAutoConfiguration {
                     .orElse(Duration.ofSeconds(10));
             LOG.infof("CaseHub oversight gate: approvals through the remote casehub-work service at %s", base.getHost());
             return new WorkItemApprovalPort(new HttpWorkItemGateway(base, tokens, timeout));
+        }
+
+        private static URI remoteUrl(String url) {
+            URI uri;
+            try {
+                uri = URI.create(url);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalStateException(WORK_URL + " is not a valid URL: " + url, e);
+            }
+            if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                    || uri.getHost() == null) {
+                throw new IllegalStateException(WORK_URL + " must be an http(s) URL with a host — got " + url);
+            }
+            return uri;
         }
     }
 

@@ -170,4 +170,17 @@ class HttpWorkItemGatewayTest {
         assertThatThrownBy(() -> WorkTokenProvider.single(" ", "t")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> WorkTokenProvider.single("A", null)).isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void findByLabel_serverThatNeverEndsPaging_isRefused() {
+        String page = "{\"items\":[{\"id\":\"" + UUID.randomUUID() + "\",\"status\":\"PENDING\"}],\"totalCount\":1,\"hasMore\":true}";
+        for (int i = 0; i <= HttpWorkItemGateway.MAX_PAGES; i++) {
+            server.respondNext(200, page);
+        }
+
+        assertThatThrownBy(() -> gateway.findByLabel(LABEL, "A"))
+                .isInstanceOfSatisfying(WorkItemGatewayException.class, e -> assertThat(e.status()).isEqualTo(-1))
+                .hasMessageContaining("pages");
+        assertThat(server.requests()).hasSize(HttpWorkItemGateway.MAX_PAGES);
+    }
 }
