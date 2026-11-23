@@ -71,7 +71,7 @@ public final class HttpWorkItemGateway implements WorkItemGateway {
             query.put("limit", Integer.toString(PAGE));
             Page page = read(send(tenancyId, request("list-all", query).GET(), 200), Page.class);
             List<Item> found = page.items() == null ? List.of() : page.items();
-            found.forEach(item -> items.add(item.toGateItem()));
+            found.forEach(item -> items.add(toGateItem(item)));
             if (!page.hasMore() || found.isEmpty()) {
                 return items;
             }
@@ -92,7 +92,7 @@ public final class HttpWorkItemGateway implements WorkItemGateway {
         HttpRequest.Builder post = request("create", Map.of())
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body));
-        return read(send(tenancyId, post, 201), Item.class).toGateItem();
+        return toGateItem(read(send(tenancyId, post, 201), Item.class));
     }
 
     @Override
@@ -155,11 +155,28 @@ public final class HttpWorkItemGateway implements WorkItemGateway {
     }
 
     private static <T> T read(String body, Class<T> type) {
+        T value;
         try {
-            return MAPPER.readValue(body, type);
+            value = MAPPER.readValue(body, type);
         } catch (IOException e) {
-            throw new WorkItemGatewayException("casehub-work response cannot be read as " + type.getSimpleName(), -1, e);
+            throw unreadable(type.getSimpleName(), e);
         }
+        if (value == null) {
+            throw unreadable(type.getSimpleName(), null);
+        }
+        return value;
+    }
+
+    /** An item the gate cannot use (missing, or without an ID) makes the whole response unreadable. */
+    private static GateItem toGateItem(Item item) {
+        if (item == null || item.id() == null) {
+            throw unreadable("work item", null);
+        }
+        return item.toGateItem();
+    }
+
+    private static WorkItemGatewayException unreadable(String what, Exception cause) {
+        return new WorkItemGatewayException("casehub-work response cannot be read as " + what, -1, cause);
     }
 
     private static String encode(String value) {
@@ -180,7 +197,7 @@ public final class HttpWorkItemGateway implements WorkItemGateway {
 
         GateItem toGateItem() {
             Set<String> paths = labels == null ? Set.of()
-                    : labels.stream().map(Label::path).filter(Objects::nonNull).collect(Collectors.toSet());
+                    : labels.stream().filter(Objects::nonNull).map(Label::path).filter(Objects::nonNull).collect(Collectors.toSet());
             return new GateItem(id, status(status), createdBy, callerRef, createdAt, paths, candidateGroups);
         }
 
