@@ -187,9 +187,9 @@ classes, so `governance-core` tests use fakes.
 
 ## TODO
 
-- **Spring Boot implementation** (#15). Until casehub-work offers `WorkItemApi` for Spring, or this
-  repo adds a Spring approval adapter over casehub-work's `WorkItemService`, the Spring gate refuses
-  every call that needs approval. The adapter must reproduce the Quarkus behaviour and tests.
+- **In-process Spring approvals** (casehubio/work#436). Spring gets approvals today from a remote
+  casehub-work service over REST (#15, `docs/superpowers/specs/2026-11-22-remote-work-approval-design.md`)
+  or an application-defined `WorkItemApi` bean; an in-process Spring `WorkItemApi` waits on casehub-work.
 
 ## Left to the builder
 
