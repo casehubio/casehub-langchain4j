@@ -624,11 +624,13 @@ Corrective RAG — automatically discards low-relevance chunks before the LLM se
 **What this delivers**
 Every RAG retrieval is recorded with provenance — what was retrieved, for which query, from which corpus. Query clustering, document impact centrality, zero-hit detection. Observability for RAG that LC4j does not provide. Classpath-activated from neocortex's tracking infrastructure.
 
-**Key classes:** `TrackingContentRetriever` — wraps any ContentRetriever, records each retrieval into neocortex's `RetrievalTracker` (documents by `source_document_id`), stamps `retrieval_id` for feedback, publishes `RetrievalRecorded`; never changes or fails a retrieval. `RetrievalIdAwareContentAggregator` (opt-in, #24) keeps LangChain4j's passage de-duplication working in multi-retrieval pipelines despite the stamps. Composes as Tracking(CRAG(Tenancy(app))). Analytics: neocortex's `RetrievalAnalyzer` used directly. Tracker: neocortex's `SqliteRetrievalTracker` (`rag-tracking` in Quarkus, `rag-tracking-spring` in Spring Boot) or an application bean. Design: `docs/superpowers/specs/2026-11-20-retrieval-tracking-design.md`.
+**Key classes:** `TrackingContentRetriever` — wraps any ContentRetriever, records each retrieval into neocortex's `RetrievalTracker` (documents by `source_document_id`), stamps `retrieval_id` for feedback, publishes `RetrievalRecorded`; never changes or fails a retrieval. `TrackingRetrievalAugmentor` (#28) records once per question when the augmentor rewrites queries (retrievers inside stand down; wrapped automatically in Spring and Quarkus). `RetrievalIdAwareContentAggregator` (opt-in, #24) keeps LangChain4j's passage de-duplication working in multi-retrieval pipelines despite the stamps. Composes as Tracking(CRAG(Tenancy(app))). Analytics: neocortex's `RetrievalAnalyzer` used directly. Tracker: neocortex's `SqliteRetrievalTracker` (`rag-tracking` in Quarkus, `rag-tracking-spring` in Spring Boot) or an application bean. Design: `docs/superpowers/specs/2026-11-20-retrieval-tracking-design.md`.
 
 **Issues**
 - #19 — retrieval tracking (core + quarkus + spring)
 - #20 — Spring-friendly SQLite tracker ✅ (upstream: neocortex#1200)
+- #24 — passage de-duplication with retrieval IDs ✅
+- #28 — one record per question at the augmentor
 
 ---
 

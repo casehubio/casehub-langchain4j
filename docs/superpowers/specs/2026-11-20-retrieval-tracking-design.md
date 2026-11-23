@@ -213,6 +213,9 @@ tenant used in `CorpusRef` for analysis.
   multi-retrieval pipeline (query expansion, routing) no longer de-duplicates it *(final review)*.
   Resolved by `RetrievalIdAwareContentAggregator` (#24), an opt-in `ContentAggregator` decorator that
   merges ignoring `retrieval_id`/`_trackingId` and restores the first retrieval's IDs.
+- With an augmentor that rewrites the question, the retriever decorator alone records N retrievals
+  per question under the rewritten texts. Resolved by `TrackingRetrievalAugmentor` (#28,
+  `2026-11-23-augmentor-tracking-design.md`): one record per question at the augmentor.
 
 ## Tests the builder must include
 

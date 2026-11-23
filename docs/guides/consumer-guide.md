@@ -370,6 +370,30 @@ List<QueryQualitySignal> zeroHits = RetrievalAnalyzer.zeroHitQueries(tracker, co
 | Content returned but none has `source_document_id` | Not recorded (an empty record would read as a false zero-hit) |
 | Already recorded upstream (`retrieval_id` or neocortex's `_trackingId` on any content) | Not recorded again; `_trackingId` is copied to `retrieval_id` |
 
+**Augmentors that rewrite the question.** A `RetrievalAugmentor` with a `QueryTransformer`
+(`ExpandingQueryTransformer`, `CompressingQueryTransformer`, a HyDE or step-back transformer of your
+own) calls the retrievers once per rewritten query. Tracking therefore also wraps your
+`RetrievalAugmentor` bean: each question is recorded **once**, under the user's message text, with
+the contents after aggregation — the retrievers inside stand down. Spring wraps a
+`RetrievalAugmentor` bean; Quarkus wraps a `RetrievalAugmentor` bean (quarkus-langchain4j's default
+lookup) and the augmentor a `Supplier<RetrievalAugmentor>` bean hands out
+(`@RegisterAiService(retrievalAugmentor = MySupplier.class)`). The retrieval ID reaches you in the
+AI service's sources (`Result.sources()`). An augmentor that is not a bean — built inline, or a
+Quarkus supplier class without a scope — is wrapped by hand:
+
+```java
+RetrievalAugmentor augmentor = new TrackingRetrievalAugmentor(
+        DefaultRetrievalAugmentor.builder().queryTransformer(expanding).contentRetriever(retriever).build(),
+        tracker, "default", () -> principal.tenancyId(), event -> {});
+```
+
+A transformer must keep the query's metadata (`Query.from(text, query.metadata())`, as LangChain4j's
+own transformers do): queries built without it lose the marker, and each one is recorded at the
+retriever under its rewritten text. Contents already recorded by neocortex (hybrid-search) keep
+their own ID; the rest of the question's contents are recorded. CRAG grades each retrieval against
+the query that retrieved it — for a compressing transformer that is the standalone question, which
+is what you want.
+
 **Known limits:** one corpus name (`casehub.langchain4j.tracking.corpus`, default `default`) for
 every wrapped retriever; `maxResults` in the record is the number of contents returned
 (`ContentRetriever` has no requested limit); a missing score is recorded as `0.0`. The hybrid-search
