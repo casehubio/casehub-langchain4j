@@ -5,6 +5,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.invocation.InvocationContext;
+import dev.langchain4j.invocation.InvocationParameters;
+import dev.langchain4j.rag.AugmentationRequest;
+import dev.langchain4j.rag.DefaultRetrievalAugmentor;
+import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
@@ -15,6 +21,7 @@ import io.casehub.langchain4j.tenancy.TenantIsolatingContentRetriever;
 import io.casehub.langchain4j.tenancy.spring.TenancyAutoConfiguration;
 import io.casehub.langchain4j.tracking.RecordingTracker;
 import io.casehub.langchain4j.tracking.TrackingContentRetriever;
+import io.casehub.langchain4j.tracking.TrackingRetrievalAugmentor;
 import io.casehub.neocortex.rag.CorpusRef;
 import io.casehub.neocortex.rag.RelevanceEvaluator;
 import io.casehub.neocortex.rag.RelevanceGrade;
@@ -181,5 +188,54 @@ class TrackingAutoConfigurationTest {
                         assertThat(r.chunks()).extracting(RetrievedChunk::sourceDocumentId).containsExactly("doc-good-a");
                     });
                 });
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class AugmentorConfig {
+        @Bean
+        RetrievalAugmentor appAugmentor(ContentRetriever appRetriever) {
+            return DefaultRetrievalAugmentor.builder()
+                    .queryTransformer(q -> List.of(Query.from("variant one", q.metadata()), Query.from("variant two", q.metadata())))
+                    .contentRetriever(appRetriever)
+                    .executor(Runnable::run)
+                    .build();
+        }
+    }
+
+    private static AugmentationRequest question() {
+        UserMessage message = UserMessage.from("how do I reset my password?");
+        return new AugmentationRequest(message, dev.langchain4j.rag.query.Metadata.builder().chatMessage(message)
+                .invocationContext(InvocationContext.builder().invocationParameters(new InvocationParameters()).build())
+                .build());
+    }
+
+    @Test
+    void retrievalAugmentorBean_isWrapped() {
+        runner.withUserConfiguration(AppConfig.class, TrackerConfig.class, AugmentorConfig.class).run(context -> {
+            RetrievalAugmentor augmentor = context.getBean(RetrievalAugmentor.class);
+            assertThat(augmentor).isInstanceOf(TrackingRetrievalAugmentor.class);
+
+            augmentor.augment(question());
+
+            RecordingTracker tracker = context.getBean(RecordingTracker.class);
+            assertThat(tracker.records).singleElement()
+                    .satisfies(r -> assertThat(r.query().text()).isEqualTo("how do I reset my password?"));
+            assertThat(context.getBean(RecordedListener.class).received).hasSize(1);
+        });
+    }
+
+    @Test
+    void noTracker_augmentorNotWrapped() {
+        runner.withUserConfiguration(AppConfig.class, AugmentorConfig.class).run(context ->
+                assertThat(context.getBean(RetrievalAugmentor.class)).isNotInstanceOf(TrackingRetrievalAugmentor.class));
+    }
+
+    @Test
+    void trackingAugmentorBean_notWrappedAgain() {
+        runner.withUserConfiguration(AppConfig.class, TrackerConfig.class)
+                .withBean("appAugmentor", RetrievalAugmentor.class,
+                        () -> new TrackingRetrievalAugmentor(r -> null, new RecordingTracker(), "kb", () -> "a", e -> {}))
+                .run(context -> assertThat(((TrackingRetrievalAugmentor) context.getBean(RetrievalAugmentor.class)).delegate())
+                        .isNotInstanceOf(TrackingRetrievalAugmentor.class));
     }
 }

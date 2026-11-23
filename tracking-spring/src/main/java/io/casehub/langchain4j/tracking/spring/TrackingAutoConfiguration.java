@@ -1,7 +1,10 @@
 package io.casehub.langchain4j.tracking.spring;
 
+import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import io.casehub.langchain4j.tracking.TrackingContentRetriever;
+import io.casehub.langchain4j.tracking.TrackingRetrievalAugmentor;
+import io.casehub.neocortex.rag.RetrievalRecorded;
 import io.casehub.neocortex.rag.RetrievalTracker;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,7 +21,9 @@ import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 
 /**
- * Wraps every {@link ContentRetriever} bean with a {@link TrackingContentRetriever} when a
+ * Wraps every {@link ContentRetriever} bean with a {@link TrackingContentRetriever}, and every
+ * {@link RetrievalAugmentor} bean with a {@link TrackingRetrievalAugmentor} (one record per question,
+ * also when the augmentor rewrites queries — its tracked retrievers then stand down), when a
  * {@link RetrievalTracker} bean exists; without one, retrievers are left as they are and an INFO is
  * logged. neocortex's {@code casehub-neocortex-rag-tracking-spring} supplies a SQLite tracker
  * ({@code casehub.rag.tracking.sqlite.path}); an application may declare its own instead.
@@ -78,10 +83,22 @@ public class TrackingAutoConfiguration {
 
         @Override
         public Object postProcessAfterInitialization(Object bean, String beanName) {
+            if (bean instanceof RetrievalAugmentor augmentor && !(bean instanceof TrackingRetrievalAugmentor)) {
+                RetrievalTracker current = tracker(beanName, "RetrievalAugmentor");
+                return current == null ? bean
+                        : new TrackingRetrievalAugmentor(augmentor, current, corpus(), tenant(), this::publish);
+            }
             if (!(bean instanceof ContentRetriever retriever) || bean instanceof TrackingContentRetriever
                     || bean instanceof RetrievalTracker || HYBRID_BEAN_NAME.equals(beanName)) {
                 return bean;
             }
+            RetrievalTracker current = tracker(beanName, "ContentRetriever");
+            return current == null ? bean
+                    : new TrackingContentRetriever(retriever, current, corpus(), tenant(), this::publish);
+        }
+
+        /** The tracker, or {@code null} (INFO) when there is none. */
+        private RetrievalTracker tracker(String beanName, String kind) {
             RetrievalTracker current;
             try {
                 current = tracker.getIfAvailable();
@@ -90,17 +107,21 @@ public class TrackingAutoConfiguration {
                         + " cannot tell which one records retrievals — keep one, or mark one @Primary", e);
             }
             if (current == null) {
-                LOG.infof("casehub-langchain4j-tracking: no RetrievalTracker bean — retrievals of ContentRetriever %s"
-                        + " are not recorded", beanName);
-                return bean;
+                LOG.infof("casehub-langchain4j-tracking: no RetrievalTracker bean — retrievals of %s %s"
+                        + " are not recorded", kind, beanName);
             }
-            String corpus = environment.getProperty(CORPUS_PROPERTY, "default");
-            return new TrackingContentRetriever(retriever, current, corpus, tenant(), recorded -> {
-                ApplicationEventPublisher publisher = events.getIfAvailable();
-                if (publisher != null) {
-                    publisher.publishEvent(recorded);
-                }
-            });
+            return current;
+        }
+
+        private String corpus() {
+            return environment.getProperty(CORPUS_PROPERTY, "default");
+        }
+
+        private void publish(RetrievalRecorded recorded) {
+            ApplicationEventPublisher publisher = events.getIfAvailable();
+            if (publisher != null) {
+                publisher.publishEvent(recorded);
+            }
         }
 
         /** The principal's tenancy ID per retrieval (blank → not recorded), else {@value #DEFAULT_TENANT}. */
