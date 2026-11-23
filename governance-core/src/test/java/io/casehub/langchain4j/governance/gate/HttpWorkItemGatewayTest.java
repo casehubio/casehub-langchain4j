@@ -183,4 +183,24 @@ class HttpWorkItemGatewayTest {
                 .hasMessageContaining("pages");
         assertThat(server.requests()).hasSize(HttpWorkItemGateway.MAX_PAGES);
     }
+
+    @Test
+    void malformedResponses_areGatewayErrorsNotNpe() {
+        String id = UUID.randomUUID().toString();
+        for (String body : new String[] {
+                "null",
+                "{\"items\":[null],\"hasMore\":false}",
+                "{\"items\":[{\"status\":\"PENDING\"}],\"hasMore\":false}"}) {
+            server.respondNext(200, body);
+            assertThatThrownBy(() -> gateway.findByLabel(LABEL, "A")).as(body)
+                    .isInstanceOf(WorkItemGatewayException.class)
+                    .hasMessageContaining("cannot be read");
+        }
+        server.respondNext(201, "null");
+        assertThatThrownBy(() -> gateway.create(WorkItemCreateRequest.builder().title("t").build(), "A"))
+                .isInstanceOf(WorkItemGatewayException.class);
+        server.respondNext(200, "{\"items\":[{\"id\":\"" + id + "\",\"status\":\"PENDING\",\"labels\":[null,{\"path\":\"x\"}]}],\"hasMore\":false}");
+        assertThat(gateway.findByLabel(LABEL, "A")).singleElement()
+                .satisfies(item -> assertThat(item.labels()).containsExactly("x"));
+    }
 }
