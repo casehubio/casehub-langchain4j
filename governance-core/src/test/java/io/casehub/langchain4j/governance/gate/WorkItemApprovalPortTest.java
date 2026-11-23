@@ -126,4 +126,49 @@ class WorkItemApprovalPortTest {
 
         assertThat(port.latest("acme", FP).orElseThrow().approverGroups()).containsExactlyInAnyOrder("mlro", "board");
     }
+
+    @Test
+    void portOverGateway_usesOnlyGenuineNewestItem() {
+        Instant t1 = Instant.now().minusSeconds(120);
+        String ref = WorkItemApprovalPort.CALLER_REF_PREFIX + FP;
+        GateItem approved = new GateItem(java.util.UUID.randomUUID(), WorkItemStatus.COMPLETED, "agent:treasurer", ref,
+                t1, Set.of(LABEL), "mlro");
+        GateItem rejected = new GateItem(java.util.UUID.randomUUID(), WorkItemStatus.REJECTED, "agent:treasurer", ref,
+                t1.plusSeconds(60), Set.of(LABEL), "mlro");
+        GateItem forged = new GateItem(java.util.UUID.randomUUID(), WorkItemStatus.COMPLETED, "user:x", "other",
+                t1.plusSeconds(90), Set.of(LABEL), "mlro");
+        WorkItemApprovalPort overGateway = new WorkItemApprovalPort(new ListGateway(java.util.List.of(approved, rejected, forged)));
+
+        assertThat(overGateway.latest("acme", FP)).hasValueSatisfying(r -> {
+            assertThat(r.id()).isEqualTo(rejected.id());
+            assertThat(r.state()).isEqualTo(ApprovalState.REJECTED);
+        });
+    }
+
+    @Test
+    void portOverGateway_usedLabelMarksUsed() {
+        GateItem item = new GateItem(java.util.UUID.randomUUID(), WorkItemStatus.COMPLETED, "agent:treasurer",
+                WorkItemApprovalPort.CALLER_REF_PREFIX + FP, Instant.now(),
+                Set.of(LABEL, WorkItemApprovalPort.USED_LABEL), "mlro");
+        WorkItemApprovalPort overGateway = new WorkItemApprovalPort(new ListGateway(java.util.List.of(item)));
+
+        assertThat(overGateway.latest("acme", FP)).hasValueSatisfying(r -> assertThat(r.used()).isTrue());
+    }
+
+    private record ListGateway(java.util.List<GateItem> items) implements WorkItemGateway {
+        @Override
+        public java.util.List<GateItem> findByLabel(String label, String tenancyId) {
+            return items;
+        }
+
+        @Override
+        public GateItem create(WorkItemCreateRequest request, String tenancyId) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void addLabel(java.util.UUID id, String path, String appliedBy, String tenancyId) {
+            throw new UnsupportedOperationException();
+        }
+    }
 }
