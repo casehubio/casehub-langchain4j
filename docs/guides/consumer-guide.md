@@ -240,9 +240,12 @@ WorkTokenProvider workTokens(MyTokenService tokens) {
 ```
 
 - A `WorkItemApi` bean wins over `work.url`.
-- `work.url` without a token (neither `token` + `tenancy-id` nor a `WorkTokenProvider` bean) fails startup.
-- Any failure of the service (an error status, a timeout after `work.timeout`, default `10s`, or no
-  connection) refuses the call; there are no retries.
+- `work.url` without a token (neither `token` + `tenancy-id` nor a `WorkTokenProvider` bean) fails startup,
+  and so does `work.url` without `casehub-work-api` on the classpath.
+- A plain `http://` URL to a host other than loopback logs a WARN at startup: the token travels
+  unencrypted. Use `https`.
+- Any failure of the service (an error status, a timeout after `work.timeout`, default `10s`, no
+  connection, or a response the gate cannot read) refuses the call; there are no retries.
 - The gate cannot check a returned WorkItem's tenant (casehub-work does not expose it), so isolation
   rests on each token belonging to the right tenant.
 

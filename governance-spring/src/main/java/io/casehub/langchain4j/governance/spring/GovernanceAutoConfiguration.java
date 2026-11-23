@@ -30,6 +30,7 @@ import io.casehub.platform.api.identity.CurrentPrincipal;
 import java.util.function.Supplier;
 import org.jboss.logging.Logger;
 import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -102,7 +103,10 @@ public class GovernanceAutoConfiguration {
     public OversightToolGate oversightToolGate(
             AuditEntryWriter writer, ObjectProvider<CasehubAgentListener> lineage, BeanFactory beanFactory,
             Environment environment) {
-        ClassLoader classLoader = GovernanceAutoConfiguration.class.getClassLoader();
+        ClassLoader classLoader = beanFactory instanceof ConfigurableBeanFactory configurable
+                && configurable.getBeanClassLoader() != null
+                        ? configurable.getBeanClassLoader()
+                        : GovernanceAutoConfiguration.class.getClassLoader();
         CasehubAgentListener listener = lineage.getIfAvailable();
         RiskPort risk = ClassUtils.isPresent(RISK_CLASSIFIER, classLoader) && beanFactory instanceof ListableBeanFactory beans
                 ? EngineSupport.riskPort(beans)
@@ -111,9 +115,13 @@ public class GovernanceAutoConfiguration {
             LOG.info("CaseHub oversight gate: no @RiskClassifier beans — wrapped tool calls run without approval");
             return new OversightToolGate(null, null, () -> null, writer, listener);
         }
-        ApprovalPort approvals = ClassUtils.isPresent(WORK_ITEM_API, classLoader)
-                ? WorkSupport.approvalPort(beanFactory, environment)
-                : null;
+        boolean workApi = ClassUtils.isPresent(WORK_ITEM_API, classLoader);
+        String url = environment.getProperty(WORK_URL);
+        if (!workApi && url != null && !url.isBlank()) {
+            throw new IllegalStateException(WORK_URL + " is set but casehub-work-api is not on the classpath:"
+                    + " add io.casehub:casehub-work-api to use a remote casehub-work service");
+        }
+        ApprovalPort approvals = workApi ? WorkSupport.approvalPort(beanFactory, environment) : null;
         if (approvals == null) {
             LOG.warnf("CaseHub oversight gate: no casehub-work WorkItemApi bean and no %s — tool calls that need"
                     + " approval are refused", WORK_URL);
@@ -171,6 +179,11 @@ public class GovernanceAutoConfiguration {
             return new WorkItemApprovalPort(new HttpWorkItemGateway(base, tokens, timeout));
         }
 
+        private static boolean loopback(String host) {
+            String h = host.toLowerCase(java.util.Locale.ROOT);
+            return h.equals("localhost") || h.endsWith(".localhost") || h.startsWith("127.") || h.equals("[::1]");
+        }
+
         private static URI remoteUrl(String url) {
             URI uri;
             try {
@@ -181,6 +194,10 @@ public class GovernanceAutoConfiguration {
             if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
                     || uri.getHost() == null) {
                 throw new IllegalStateException(WORK_URL + " must be an http(s) URL with a host — got " + url);
+            }
+            if ("http".equalsIgnoreCase(uri.getScheme()) && !loopback(uri.getHost())) {
+                LOG.warnf("CaseHub oversight gate: %s uses plain http to %s — the casehub-work token is sent"
+                        + " unencrypted; use https", WORK_URL, uri.getHost());
             }
             return uri;
         }
