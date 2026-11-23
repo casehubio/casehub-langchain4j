@@ -378,7 +378,18 @@ the corpora it actually searched — set `casehub.rag.tracking.enabled=true` wit
 compares contents including their metadata. In a pipeline that retrieves several times per question
 (a query-expanding transformer or a query router with `DefaultContentAggregator`), the same passage
 from two retrievals carries two retrieval IDs and is no longer merged: the model can receive it more
-than once. A single retrieval per question is unaffected.
+than once. A single retrieval per question is unaffected. For multi-retrieval pipelines, wrap the
+aggregator in `RetrievalIdAwareContentAggregator`: it merges passages while ignoring `retrieval_id`
+and `_trackingId`, then gives each returned passage the IDs of the first retrieval it appeared in
+(feedback for a merged passage goes to that retrieval).
+
+```java
+DefaultRetrievalAugmentor.builder()
+    .queryTransformer(expandingTransformer)
+    .contentRetriever(trackedRetriever)
+    .contentAggregator(new RetrievalIdAwareContentAggregator(new DefaultContentAggregator()))
+    .build();
+```
 
 **Artifacts:** `casehub-langchain4j-tracking` (Quarkus), `casehub-langchain4j-tracking-spring` (Spring Boot)
 

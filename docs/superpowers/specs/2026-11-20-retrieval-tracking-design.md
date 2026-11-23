@@ -211,6 +211,8 @@ tenant used in `CorpusRef` for analysis.
   `rag-tracking-spring` with `casehub.rag.tracking.enabled=true`).
 - `retrieval_id` in segment metadata makes the same passage from two retrievals unequal, so a
   multi-retrieval pipeline (query expansion, routing) no longer de-duplicates it *(final review)*.
+  Resolved by `RetrievalIdAwareContentAggregator` (#24), an opt-in `ContentAggregator` decorator that
+  merges ignoring `retrieval_id`/`_trackingId` and restores the first retrieval's IDs.
 
 ## Tests the builder must include
 
