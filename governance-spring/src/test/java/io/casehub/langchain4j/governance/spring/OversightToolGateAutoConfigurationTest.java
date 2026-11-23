@@ -15,6 +15,8 @@ import io.casehub.api.spi.routing.StaticSetStrategy;
 import io.casehub.langchain4j.audit.spring.AuditAutoConfiguration;
 import io.casehub.langchain4j.governance.gate.AccountTools;
 import io.casehub.langchain4j.governance.gate.FakeWorkItemApi;
+import io.casehub.langchain4j.governance.gate.FakeWorkServer;
+import io.casehub.langchain4j.governance.gate.WorkTokenProvider;
 import io.casehub.langchain4j.governance.gate.OversightToolGate;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.casehub.work.api.WorkItemStatus;
@@ -22,6 +24,7 @@ import io.casehub.work.api.spi.WorkItemApi;
 import io.casehub.worker.api.PlannedAction;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -132,5 +135,86 @@ class OversightToolGateAutoConfigurationTest {
         OversightToolGate custom = mock(OversightToolGate.class);
         runner.withBean("customGate", OversightToolGate.class, () -> custom).run(context ->
                 assertThat(context.getBean(OversightToolGate.class)).isSameAs(custom));
+    }
+
+    private static String[] remote(FakeWorkServer server, String... extra) {
+        String[] base = {GovernanceAutoConfiguration.WORK_URL + "=" + server.url()};
+        String[] all = java.util.Arrays.copyOf(base, base.length + extra.length);
+        System.arraycopy(extra, 0, all, base.length, extra.length);
+        return all;
+    }
+
+    @Test
+    void remoteWork_fullGate() throws Exception {
+        FakeWorkItemApi work = new FakeWorkItemApi();
+        try (FakeWorkServer server = new FakeWorkServer(work, Map.of("t-acme", "acme"))) {
+            runner.withUserConfiguration(ClassifierConfig.class)
+                    .withPropertyValues(remote(server, GovernanceAutoConfiguration.WORK_TOKEN + "=t-acme",
+                            GovernanceAutoConfiguration.WORK_TENANCY + "=acme"))
+                    .run(context -> {
+                        OversightToolGate gate = context.getBean(OversightToolGate.class);
+                        AccountTools tools = new AccountTools();
+
+                        assertThat(call(gate, tools, "freezeAccount")).contains("pending");
+                        work.items.keySet().forEach(id -> work.setStatus(id, WorkItemStatus.COMPLETED));
+                        assertThat(call(gate, tools, "freezeAccount")).isEqualTo("frozen A1");
+                        assertThat(server.requests()).anySatisfy(r -> assertThat(r).startsWith("POST add-label/"));
+                        assertThat(work.listedTenants).containsOnly("acme");
+                    });
+        }
+    }
+
+    @Test
+    void workItemApiBeanWinsOverUrl() {
+        runner.withUserConfiguration(ClassifierConfig.class, WorkConfig.class)
+                .withPropertyValues(GovernanceAutoConfiguration.WORK_URL + "=http://127.0.0.1:1",
+                        GovernanceAutoConfiguration.WORK_TOKEN + "=t", GovernanceAutoConfiguration.WORK_TENANCY + "=acme")
+                .run(context -> {
+                    assertThat(call(context.getBean(OversightToolGate.class), new AccountTools(), "freezeAccount"))
+                            .contains("pending");
+                    assertThat(context.getBean(WorkConfig.class).work.created).hasSize(1);
+                });
+    }
+
+    @Test
+    void urlWithoutToken_failsStartup() {
+        runner.withUserConfiguration(ClassifierConfig.class)
+                .withPropertyValues(GovernanceAutoConfiguration.WORK_URL + "=http://127.0.0.1:1")
+                .run(context -> assertThat(context).getFailure().rootCause()
+                        .hasMessageContaining(GovernanceAutoConfiguration.WORK_TOKEN)
+                        .hasMessageContaining(GovernanceAutoConfiguration.WORK_TENANCY)
+                        .hasMessageContaining("WorkTokenProvider"));
+    }
+
+    @Test
+    void tokenProviderBeanIsUsed() throws Exception {
+        FakeWorkItemApi work = new FakeWorkItemApi();
+        try (FakeWorkServer server = new FakeWorkServer(work, Map.of("t-acme", "acme"))) {
+            runner.withUserConfiguration(ClassifierConfig.class)
+                    .withBean(WorkTokenProvider.class, () -> tenant -> Optional.of("t-" + tenant))
+                    .withPropertyValues(remote(server))
+                    .run(context -> {
+                        assertThat(call(context.getBean(OversightToolGate.class), new AccountTools(), "freezeAccount"))
+                                .contains("pending");
+                        assertThat(work.created).hasSize(1);
+                    });
+        }
+    }
+
+    @Test
+    void remoteServerError_refuses() throws Exception {
+        FakeWorkItemApi work = new FakeWorkItemApi();
+        try (FakeWorkServer server = new FakeWorkServer(work, Map.of("t-acme", "acme"))) {
+            server.respondNext(500, "");
+            runner.withUserConfiguration(ClassifierConfig.class)
+                    .withPropertyValues(remote(server, GovernanceAutoConfiguration.WORK_TOKEN + "=t-acme",
+                            GovernanceAutoConfiguration.WORK_TENANCY + "=acme"))
+                    .run(context -> {
+                        AccountTools tools = new AccountTools();
+                        assertThat(call(context.getBean(OversightToolGate.class), tools, "freezeAccount"))
+                                .startsWith(OversightToolGate.REFUSAL_PREFIX).contains("could not be checked");
+                        assertThat(tools.freezes).hasValue(0);
+                    });
+        }
     }
 }

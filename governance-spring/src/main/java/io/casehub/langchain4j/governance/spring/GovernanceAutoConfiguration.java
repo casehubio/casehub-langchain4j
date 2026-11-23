@@ -10,8 +10,12 @@ import io.casehub.langchain4j.governance.gate.ApprovalPort;
 import io.casehub.langchain4j.governance.gate.EngineRiskPort;
 import io.casehub.langchain4j.governance.gate.OversightToolGate;
 import io.casehub.langchain4j.governance.gate.RiskPort;
+import io.casehub.langchain4j.governance.gate.HttpWorkItemGateway;
 import io.casehub.langchain4j.governance.gate.WorkItemApprovalPort;
+import io.casehub.langchain4j.governance.gate.WorkTokenProvider;
 import io.casehub.work.api.spi.WorkItemApi;
+import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.ListableBeanFactory;
@@ -30,7 +34,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -47,6 +53,15 @@ public class GovernanceAutoConfiguration {
 
     /** Weight of one agent invocation as trust evidence, in {@code (0.0, 1.0]}. */
     public static final String OUTCOME_CONFIDENCE = "casehub.langchain4j.governance.outcome-confidence";
+
+    /** Base URL of a remote casehub-work service for approvals, used when there is no {@code WorkItemApi} bean. */
+    public static final String WORK_URL = "casehub.langchain4j.governance.work.url";
+    /** Bearer token for the remote casehub-work service; its principal belongs to {@link #WORK_TENANCY}. */
+    public static final String WORK_TOKEN = "casehub.langchain4j.governance.work.token";
+    /** The tenant {@link #WORK_TOKEN} belongs to; calls for other tenants are refused. */
+    public static final String WORK_TENANCY = "casehub.langchain4j.governance.work.tenancy-id";
+    /** Per-request timeout for the remote casehub-work service (default 10s). */
+    public static final String WORK_TIMEOUT = "casehub.langchain4j.governance.work.timeout";
 
     private static final Logger LOG = Logger.getLogger(GovernanceAutoConfiguration.class);
     private static final String TRUST_SOURCE = "io.casehub.ledger.api.spi.TrustScoreSource";
@@ -75,15 +90,18 @@ public class GovernanceAutoConfiguration {
     }
 
     /**
-     * The tool oversight gate. Gated calls need {@code @RiskClassifier ActionRiskClassifier} beans,
-     * a {@code WorkItemApi} bean and a {@code CurrentPrincipal}. casehub-work ships no Spring
-     * {@code WorkItemApi} yet (casehubio/casehub-langchain4j#15), so unless the application provides
-     * one, every call that needs approval is refused.
+     * The tool oversight gate. Gated calls need {@code @RiskClassifier ActionRiskClassifier} beans, a
+     * {@code CurrentPrincipal} and somewhere to store approval requests: a {@code WorkItemApi} bean
+     * (in-process casehub-work), or else a remote casehub-work service at {@value #WORK_URL}, called with
+     * the token for the call's tenant ({@value #WORK_TOKEN} for {@value #WORK_TENANCY}, or a
+     * {@link WorkTokenProvider} bean for several tenants). Without either, every call that needs
+     * approval is refused.
      */
     @Bean
     @ConditionalOnMissingBean
     public OversightToolGate oversightToolGate(
-            AuditEntryWriter writer, ObjectProvider<CasehubAgentListener> lineage, BeanFactory beanFactory) {
+            AuditEntryWriter writer, ObjectProvider<CasehubAgentListener> lineage, BeanFactory beanFactory,
+            Environment environment) {
         ClassLoader classLoader = GovernanceAutoConfiguration.class.getClassLoader();
         CasehubAgentListener listener = lineage.getIfAvailable();
         RiskPort risk = ClassUtils.isPresent(RISK_CLASSIFIER, classLoader) && beanFactory instanceof ListableBeanFactory beans
@@ -94,11 +112,11 @@ public class GovernanceAutoConfiguration {
             return new OversightToolGate(null, null, () -> null, writer, listener);
         }
         ApprovalPort approvals = ClassUtils.isPresent(WORK_ITEM_API, classLoader)
-                ? WorkSupport.approvalPort(beanFactory)
+                ? WorkSupport.approvalPort(beanFactory, environment)
                 : null;
         if (approvals == null) {
-            LOG.warn("CaseHub oversight gate: no casehub-work WorkItemApi bean — tool calls that need approval"
-                    + " are refused (Spring support: casehubio/casehub-langchain4j#15)");
+            LOG.warnf("CaseHub oversight gate: no casehub-work WorkItemApi bean and no %s — tool calls that need"
+                    + " approval are refused", WORK_URL);
         }
         Supplier<String> tenancy = ClassUtils.isPresent(CURRENT_PRINCIPAL, classLoader)
                 ? PrincipalSupport.tenancy(beanFactory)
@@ -126,9 +144,31 @@ public class GovernanceAutoConfiguration {
     /** Touches the optional casehub-work types; loaded only when they are present. */
     private static final class WorkSupport {
 
-        static ApprovalPort approvalPort(BeanFactory beanFactory) {
+        static ApprovalPort approvalPort(BeanFactory beanFactory, Environment environment) {
             WorkItemApi api = beanFactory.getBeanProvider(WorkItemApi.class).getIfAvailable();
-            return api == null ? null : new WorkItemApprovalPort(api);
+            if (api != null) {
+                LOG.info("CaseHub oversight gate: approvals through the in-process casehub-work WorkItemApi");
+                return new WorkItemApprovalPort(api);
+            }
+            String url = environment.getProperty(WORK_URL);
+            if (url == null || url.isBlank()) {
+                return null;
+            }
+            URI base = URI.create(url.trim());
+            WorkTokenProvider tokens = beanFactory.getBeanProvider(WorkTokenProvider.class).getIfAvailable();
+            if (tokens == null) {
+                String token = environment.getProperty(WORK_TOKEN);
+                String tenancy = environment.getProperty(WORK_TENANCY);
+                if (token == null || token.isBlank() || tenancy == null || tenancy.isBlank()) {
+                    throw new IllegalStateException(WORK_URL + " is set but there is no token for it: set " + WORK_TOKEN
+                            + " and " + WORK_TENANCY + ", or define a WorkTokenProvider bean");
+                }
+                tokens = WorkTokenProvider.single(tenancy.trim(), token.trim());
+            }
+            Duration timeout = Binder.get(environment).bind(WORK_TIMEOUT, Duration.class)
+                    .orElse(Duration.ofSeconds(10));
+            LOG.infof("CaseHub oversight gate: approvals through the remote casehub-work service at %s", base.getHost());
+            return new WorkItemApprovalPort(new HttpWorkItemGateway(base, tokens, timeout));
         }
     }
 
