@@ -6,7 +6,7 @@ import java.util.UUID;
 
 /**
  * The casehub-work operations {@link WorkItemApprovalPort} needs: in-process through
- * {@link WorkItemApiGateway}, or over REST through {@code HttpWorkItemGateway}.
+ * {@link WorkItemApiGateway}, or over REST through {@link HttpWorkItemGateway}.
  */
 public interface WorkItemGateway {
 
