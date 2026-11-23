@@ -42,6 +42,8 @@ import java.util.stream.Collectors;
 public final class HttpWorkItemGateway implements WorkItemGateway {
 
     private static final int PAGE = 50;
+    /** A server still answering {@code hasMore} after this many pages is treated as broken. */
+    static final int MAX_PAGES = 200;
     private static final ObjectMapper MAPPER = mapper();
 
     private final URI base;
@@ -62,7 +64,7 @@ public final class HttpWorkItemGateway implements WorkItemGateway {
     public List<GateItem> findByLabel(String label, String tenancyId) {
         List<GateItem> items = new ArrayList<>();
         int offset = 0;
-        while (true) {
+        for (int pages = 0; pages < MAX_PAGES; pages++) {
             Map<String, String> query = new LinkedHashMap<>();
             query.put("label", label);
             query.put("offset", Integer.toString(offset));
@@ -75,6 +77,8 @@ public final class HttpWorkItemGateway implements WorkItemGateway {
             }
             offset += found.size();
         }
+        throw new WorkItemGatewayException("casehub-work list-all still had more after " + MAX_PAGES + " pages", -1,
+                null);
     }
 
     @Override
