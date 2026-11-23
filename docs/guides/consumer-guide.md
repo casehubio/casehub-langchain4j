@@ -211,16 +211,40 @@ approval — restrict label editing on these WorkItems in casehub-work.
 | On the classpath / in the container | Behaviour |
 |---|---|
 | No `@RiskClassifier` beans | every wrapped call runs (INFO at startup) |
-| Classifiers, no `WorkItemApi` bean | calls needing approval are refused (WARN at startup) |
+| Classifiers, no `WorkItemApi` bean (Spring: and no `work.url`) | calls needing approval are refused (WARN at startup) |
 | Classifiers + `WorkItemApi`, no `CurrentPrincipal` | calls the rules let through run; calls needing approval are refused (WARN at startup and per call) |
 | Classifiers + `WorkItemApi` + `CurrentPrincipal` | full gate |
 
 Quarkus: the governance module injects the `@RiskClassifier` beans and `WorkItemApi`, so they are
 never removed by ArC as unused.
 
-**Spring Boot:** casehub-work provides `WorkItemApi` only for Quarkus today, so in Spring calls
-that need approval are refused unless your application defines a `WorkItemApi` bean
-([#15](https://github.com/casehubio/casehub-langchain4j/issues/15)).
+**Spring Boot:** casehub-work provides `WorkItemApi` only for Quarkus today
+([casehubio/work#436](https://github.com/casehubio/work/issues/436)). A Spring application can
+define its own `WorkItemApi` bean, or point the gate at a running casehub-work service:
+
+```properties
+casehub.langchain4j.governance.work.url=https://work.example.com
+casehub.langchain4j.governance.work.token=${WORK_TOKEN}
+casehub.langchain4j.governance.work.tenancy-id=acme
+```
+
+casehub-work takes the tenant from the token, so one token serves one tenant: calls for any other
+tenant are refused. For several tenants, define a `WorkTokenProvider` bean instead of `token` and
+`tenancy-id`:
+
+```java
+@Bean
+WorkTokenProvider workTokens(MyTokenService tokens) {
+    return tenancyId -> tokens.serviceTokenFor(tenancyId);   // Optional<String>
+}
+```
+
+- A `WorkItemApi` bean wins over `work.url`.
+- `work.url` without a token (neither `token` + `tenancy-id` nor a `WorkTokenProvider` bean) fails startup.
+- Any failure of the service (an error status, a timeout after `work.timeout`, default `10s`, or no
+  connection) refuses the call; there are no retries.
+- The gate cannot check a returned WorkItem's tenant (casehub-work does not expose it), so isolation
+  rests on each token belonging to the right tenant.
 
 **Audit:** every gate decision is an `AGENT_TOOL_GATED` entry (`pending`, `rejected`, `approved`,
 `unchecked`) in the agent's lineage, without the tool arguments. A refused call's
@@ -363,6 +387,10 @@ than once. A single retrieval per question is unaffected.
 | Property | Default | Description |
 |---|---|---|
 | `casehub.langchain4j.governance.outcome-confidence` | `0.7` | Weight of one agent invocation as trust evidence, in `(0.0, 1.0]`. An invalid value fails startup in Spring, and when the listener is first looked up in Quarkus. |
+| `casehub.langchain4j.governance.work.url` | — | Spring only: base URL of a remote casehub-work service for oversight-gate approvals, used when there is no `WorkItemApi` bean. |
+| `casehub.langchain4j.governance.work.token` | — | Spring only: bearer token for that service; its principal must belong to `work.tenancy-id`. Not needed with a `WorkTokenProvider` bean. |
+| `casehub.langchain4j.governance.work.tenancy-id` | — | Spring only: the tenant `work.token` belongs to; calls for other tenants are refused. |
+| `casehub.langchain4j.governance.work.timeout` | `10s` | Spring only: per-request timeout for that service. |
 | `casehub.langchain4j.hybrid-search.corpora` | — (required to use the retriever) | Comma-separated neocortex corpus names |
 | `casehub.langchain4j.hybrid-search.max-results` | `10` | Most contents one retrieval returns |
 | `casehub.langchain4j.tracking.corpus` | `default` | Corpus name recorded for every tracked retrieval |

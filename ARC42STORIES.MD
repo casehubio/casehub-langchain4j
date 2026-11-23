@@ -422,7 +422,7 @@ flowchart LR
 | 1 | Scaffold | J1 | — | L1, L2, L3 | ✅ |
 | 2 | Audit — Ledger + Compliance | J2 | 1 | L1, L2, L3 | ✅ |
 | 3 | Tenancy — Tenant Isolation Decorators | J2 | 1 | L1, L2, L3 | ✅ |
-| 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | ✅ (gate on tool calls; Spring approvals pending #15) |
+| 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | ✅ (gate on tool calls; Spring approvals via remote casehub-work #15) |
 | 5 | Hybrid Search — SPLADE + Dense + RRF | J2 | 1 | L1, L2, L3 | ✅ |
 | 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
 | 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
@@ -541,12 +541,13 @@ Delivered via `AgentListener`: causal lineage (shared with audit — `Governance
 |---|---|
 | `governance-core/.../GovernanceAgentListener.java` | Extends `CasehubAgentListener` — lineage + trust score + outcomes (no gate) |
 | `governance-core/.../TrustPort.java`, `LedgerTrustPort.java` | Trust port and its ledger adapter |
+| `governance-core/.../gate/WorkItemApprovalPort.java`, `WorkItemApiGateway.java`, `HttpWorkItemGateway.java` | Approval port over casehub-work — in-process `WorkItemApi` or remote REST (`WorkTokenProvider` picks the token per tenant) |
 | `governance/.../GovernanceBeans.java` | CDI: produce the listener with optional ledger trust beans |
 | `governance-spring/.../GovernanceAutoConfiguration.java` | Spring auto-configuration |
 
 **Issues**
 - #10 — lineage + trust; oversight gate on tool calls (`OversightToolGate`, design `docs/superpowers/specs/2026-11-20-tool-oversight-gate-design.md`)
-- #15 — full Spring Boot approvals (open)
+- #15 — Spring Boot approvals over casehub-work REST (`HttpWorkItemGateway`, design `docs/superpowers/specs/2026-11-22-remote-work-approval-design.md`); in-process Spring waits on casehubio/work#436
 - #11 — Quarkus CDI and Spring wiring
 
 ---
