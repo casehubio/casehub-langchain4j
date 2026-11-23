@@ -64,7 +64,7 @@ Package `io.casehub.langchain4j.governance.gate`.
 ### Failure behaviour
 
 The gate already treats an exception from the approval port as a refusal: the tool call does not
-run, and the gate logs and audits it. That is the existing `OversightToolGate` behaviour, and
+run, and the gate logs and audits it. That is the existing `GatedToolExecutor` behaviour, and
 this change keeps it. A test pins it for a 5xx from the gateway.
 
 | Situation | Result |
