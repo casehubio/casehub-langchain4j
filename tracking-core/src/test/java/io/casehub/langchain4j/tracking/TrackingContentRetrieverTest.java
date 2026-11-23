@@ -311,4 +311,11 @@ class TrackingContentRetrieverTest {
 
         assertThat(tracking(delegate, () -> "a").delegate()).isSameAs(delegate);
     }
+
+    @Test
+    void queryWithoutMetadata_recordedAsToday() {
+        tracking(List.of(doc("one", "doc-1", 0.8))).retrieve(Query.from("q"));
+
+        assertThat(tracker.records).singleElement().satisfies(r -> assertThat(r.query().text()).isEqualTo("q"));
+    }
 }
