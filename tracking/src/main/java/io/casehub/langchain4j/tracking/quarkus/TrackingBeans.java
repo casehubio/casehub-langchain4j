@@ -73,7 +73,7 @@ public class TrackingBeans {
     public ContentRetriever trackingContentRetriever(@Any Instance<ContentRetriever> keepAlive,
             Instance<RetrievalTracker> tracker, Instance<CurrentPrincipal> principal, Event<RetrievalRecorded> recorded,
             @ConfigProperty(name = "casehub.langchain4j.tracking.corpus", defaultValue = "default") String corpus) {
-        ContentRetriever delegate = resolvedBean(ContentRetriever.class);
+        ContentRetriever delegate = resolvedBean(ContentRetriever.class, false);
         if (delegate == null) {
             throw new UnsatisfiedResolutionException(
                     "casehub-langchain4j-tracking found no ContentRetriever bean to track — define one, or remove the injection point");
@@ -98,7 +98,7 @@ public class TrackingBeans {
      * resolves, or when EasyRAG registers one.
      */
     public RetrievalAugmentor trackedApplicationAugmentor() {
-        RetrievalAugmentor delegate = resolvedBean(RetrievalAugmentor.class);
+        RetrievalAugmentor delegate = resolvedBean(RetrievalAugmentor.class, true);
         if (delegate == null) {
             throw new UnsatisfiedResolutionException("casehub-langchain4j-tracking found no RetrievalAugmentor bean to track");
         }
@@ -150,11 +150,20 @@ public class TrackingBeans {
         };
     }
 
-    /** The bean of {@code type} ArC would inject if this module were absent; {@code null} if there is none. */
-    private <T> T resolvedBean(Class<T> type) {
+    /**
+     * The bean of {@code type} ArC would inject if this module were absent; {@code null} if there is none.
+     * {@code defaultOnly}: no fallback to qualified beans.
+     */
+    private <T> T resolvedBean(Class<T> type, boolean defaultOnly) {
         List<Bean<?>> candidates = narrow(beanManager.getBeans(type, Any.Literal.INSTANCE).stream()
                 .filter(b -> b.getBeanClass() != TrackingBeans.class && !AUGMENTOR_BEAN_NAME.equals(b.getName()))
                 .toList());
+        if (defaultOnly) {
+            // never hand a qualified augmentor to an unqualified lookup
+            candidates = candidates.stream()
+                    .filter(b -> b.getQualifiers().stream().anyMatch(Default.class::isInstance))
+                    .toList();
+        }
         if (candidates.isEmpty()) {
             return null;
         }
