@@ -287,19 +287,38 @@ class TrackingRetrievalAugmentorTest {
     }
 
     @Test
-    void resultWithoutContents_zeroHitRecord() {
-        // AugmentationResult copies a null contents list to an empty one: an empty retrieval
+    void resultWithoutContents_noRetrieval_noRecord() {
+        // AugmentationResult copies a null contents list to an empty one; no retriever ran
         AugmentationResult expected = AugmentationResult.builder().chatMessage(UserMessage.from(QUESTION)).build();
 
         AugmentationResult result = tracking(r -> expected).augment(request());
 
         assertThat(result.contents()).isEmpty();
-        assertThat(tracker.records).singleElement().satisfies(r -> assertThat(r.chunks()).isEmpty());
+        assertThat(tracker.records).isEmpty();
     }
 
     @Test
     void nullDelegate_rejected() {
         assertThatThrownBy(() -> new TrackingRetrievalAugmentor(null, tracker, "kb", () -> "a", e -> {}))
                 .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void noRetrieverCalled_noRecord() {
+        var augmentor = tracking(DefaultRetrievalAugmentor.builder().queryRouter(q -> List.of())
+                .executor(Runnable::run).build());
+
+        augmentor.augment(request());
+
+        assertThat(tracker.records).isEmpty();
+    }
+
+    @Test
+    void unwrappedRetrieverWithContents_recorded() {
+        var augmentor = tracking(inner(q -> List.of(doc("p", "doc-1"))).build());
+
+        augmentor.augment(request());
+
+        assertThat(tracker.records).hasSize(1);
     }
 }

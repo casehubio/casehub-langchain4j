@@ -61,15 +61,19 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
         InvocationParameters parameters = request.metadata().invocationParameters();
         AugmentationRequest marked = parameters == null ? withFreshParameters(request) : request;
         InvocationParameters marker = parameters == null ? marked.metadata().invocationParameters() : parameters;
-        acquire(marker);
+        int before = acquire(marker);
         AugmentationResult result;
+        int retrievals;
         try {
             result = delegate.augment(marked);
         } finally {
-            release(marker);
+            retrievals = release(marker) - before;
         }
         if (result == null || result.contents() == null) {
             return result;
+        }
+        if (retrievals <= 0 && result.contents().isEmpty()) {
+            return result;  // nothing was retrieved: not a zero-hit question
         }
         try {
             List<Content> stamped = recorder.record(user.singleText(), result.contents(), true);
@@ -80,24 +84,35 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
         }
     }
 
-    /** Counts nested or concurrent calls sharing one {@code InvocationParameters}. */
-    private static void acquire(InvocationParameters parameters) {
+    /**
+     * Counts nested or concurrent calls sharing one {@code InvocationParameters}; returns the number of
+     * stood-down retrievals so far (calls sharing the object share that count — an approximation that
+     * only matters for telling "nothing retrieved" from "nothing found").
+     */
+    private static int acquire(InvocationParameters parameters) {
         synchronized (parameters) {
             AtomicInteger calls = parameters.get(TRACKED_BY_AUGMENTOR_KEY);
             if (calls == null) {
                 calls = new AtomicInteger();
                 parameters.put(TRACKED_BY_AUGMENTOR_KEY, calls);
+                parameters.put(RetrievalRecorder.RETRIEVALS_KEY, new AtomicInteger());
             }
             calls.incrementAndGet();
+            return parameters.<AtomicInteger>get(RetrievalRecorder.RETRIEVALS_KEY).get();
         }
     }
 
-    private static void release(InvocationParameters parameters) {
+    /** Releases one call; returns the stood-down retrievals counted up to now. */
+    private static int release(InvocationParameters parameters) {
         synchronized (parameters) {
+            AtomicInteger retrievals = parameters.get(RetrievalRecorder.RETRIEVALS_KEY);
+            int count = retrievals == null ? 0 : retrievals.get();
             AtomicInteger calls = parameters.get(TRACKED_BY_AUGMENTOR_KEY);
             if (calls == null || calls.decrementAndGet() <= 0) {
                 parameters.asMap().remove(TRACKED_BY_AUGMENTOR_KEY);
+                parameters.asMap().remove(RetrievalRecorder.RETRIEVALS_KEY);
             }
+            return count;
         }
     }
 
