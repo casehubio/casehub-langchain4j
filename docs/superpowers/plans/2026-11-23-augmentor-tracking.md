@@ -117,3 +117,43 @@
 - [ ] **Step 2:** Retrieval tracking spec: a known-limits line pointing to this design (#28). ARC42 C9: `TrackingRetrievalAugmentor`, issue #28.
 - [ ] **Step 3:** Run `mvn clean install` → BUILD SUCCESS, 0 failures.
 - [ ] **Step 4: Commit** `docs(tracking): retrieval tracking at the augmentor` (`Closes #28`).
+
+---
+
+## Revision 2026-11-24 (spec §Revision 2026-11-24)
+
+### Task 6: Record only when a retrieval ran (final review I2)
+
+**Files:** Modify `tracking-core/.../RetrievalRecorder.java`, `TrackingContentRetriever.java`, `TrackingRetrievalAugmentor.java`; Test `TrackingRetrievalAugmentorTest.java`.
+
+**Interfaces:** Produces package-private `static void countStoodDown(Query)` on `RetrievalRecorder` (bumps `TRACKED_BY_AUGMENTOR_KEY + ".retrievals"`, an `AtomicInteger` in the same `InvocationParameters`); `TrackingContentRetriever` calls it when it stands down.
+
+- [ ] **Step 1: Failing tests:** `noRetrieverCalled_noRecord` — augmentor whose router returns no retrievers (`q -> List.of()`) over a request: 0 records; `noRetrieverCalled_untrackedRetriever_noRecord` stays as is for a plain (unwrapped) retriever? → **record** (a retrieval ran but nobody counted it) is unknowable: rule is "record only if a wrapped retriever stood down OR result has contents". Test `unwrappedRetrieverWithContents_recorded` — `DefaultRetrievalAugmentor` over an unwrapped retriever returning one doc: 1 record. Existing `emptyAggregation_zeroHitRecord` still 1 record (a wrapped retriever ran).
+- [ ] **Step 2:** `mvn -q test -pl tracking-core` → `noRetrieverCalled_noRecord` fails.
+- [ ] **Step 3:** Augmentor reads the retrievals counter before and after `delegate.augment`; skip recording when the delta is 0 **and** `result.contents()` is empty. Counter entry removed with the marker at zero.
+- [ ] **Step 4:** `mvn -q test -pl tracking-core` → green. **Commit** `fix(tracking): no record when the augmentor retrieved nothing` (`Refs #28`).
+
+### Task 7: `tracking` as a Quarkus extension
+
+**Files:**
+- Create: `tracking-deployment/pom.xml`, `tracking-deployment/src/main/java/io/casehub/langchain4j/tracking/deployment/TrackingProcessor.java`, `tracking/src/main/resources/META-INF/quarkus-extension.yaml`, `tracking/src/main/java/io/casehub/langchain4j/tracking/quarkus/TrackingAugmentorCreator.java`
+- Modify: `pom.xml` (module `tracking-deployment` after `tracking`), `tracking/pom.xml` (`quarkus-extension-maven-plugin` `extension-descriptor`, deployment `${project.groupId}:casehub-langchain4j-tracking-deployment:${project.version}`), `bom/pom.xml` (deployment entry), `TrackingBeans.java` (drop the `@Dependent` producer; add `public RetrievalAugmentor trackedApplicationAugmentor()`; `resolvedBean` excludes beans whose class is `TrackingRetrievalAugmentor`)
+- Test: `TrackingNoAugmentorTest` (now: `isResolvable()` false), `TrackingAugmentorBeanTest` (producer bean), new `TrackingAugmentorClassBeanTest`, `TrackingQualifiedAugmentorTest`, `TrackingTwoAugmentorsTest`; `AugmentorTestBeans` gains the class-bean, qualified and two-default variants.
+
+**Interfaces:** Consumes `TrackingRetrievalAugmentor`, `TrackingBeans#track(RetrievalAugmentor)`. Produces `TrackingProcessor` build steps `feature()` (`casehub-langchain4j-tracking`) and `trackApplicationAugmentor(BeanDiscoveryFinishedBuildItem, BuildProducer<SyntheticBeanBuildItem>)`.
+
+- [ ] **Step 1: Failing tests** (one profile each, `@IfBuildProperty(casehub.test.augmentor)` switches):
+  - `TrackingNoAugmentorTest.noAugmentorBean_unresolvable` — `Instance<RetrievalAugmentor>.isResolvable()` false; retriever tracking still records.
+  - `TrackingAugmentorBeanTest` (producer bean) and `TrackingAugmentorClassBeanTest` (`@ApplicationScoped class AppClassAugmentor implements RetrievalAugmentor`) — injected augmentor is `TrackingRetrievalAugmentor`; one augment → 1 record.
+  - `TrackingQualifiedAugmentorTest` — only `@Named("a")` augmentor: `Instance<RetrievalAugmentor>` (default) unresolvable.
+  - `TrackingTwoAugmentorsTest` — two `@Default` augmentors: app starts; `Instance<RetrievalAugmentor>.isResolvable()` false.
+  - `TrackingAugmentorWithoutTrackerTest` unchanged (unwrapped).
+- [ ] **Step 2:** `mvn -q install -pl tracking-core -DskipTests && mvn test -pl tracking` → fail.
+- [ ] **Step 3:** Deployment module (deps: `casehub-langchain4j-tracking`, `quarkus-arc-deployment`) and the extension plugin on `tracking`. Build step: `BeanResolver r = beans.getBeanResolver(); Set<BeanInfo> found = r.resolveBeans(ClassType.create(RetrievalAugmentor.class));` → exactly one after `r.resolveAmbiguity(found)` (catch `AmbiguousResolutionException` → none), **or** none and EasyRAG's `EasyRetrievalAugmentor` class is loadable → `SyntheticBeanBuildItem.configure(TrackingRetrievalAugmentor.class).types(RetrievalAugmentor.class).scope(Singleton.class).alternative(true).priority(300).creator(TrackingAugmentorCreator.class).done()`. `TrackingAugmentorCreator implements BeanCreator<RetrievalAugmentor>` → `Arc.container().instance(TrackingBeans.class).get().trackedApplicationAugmentor()`.
+- [ ] **Step 4:** `mvn -q install -pl tracking,tracking-deployment -am -DskipTests && mvn test -pl tracking` → all green (existing tests included). If the runtime `@QuarkusTest`s cannot resolve the deployment module in the reactor, move them to `tracking-deployment` and ledger a Ruling.
+- [ ] **Step 5: Commit** `feat(tracking): Quarkus extension tracks the application's augmentor` (`Refs #28`).
+
+### Task 8: Docs and full build
+
+- [ ] Consumer guide: Quarkus covers a `@Default` augmentor bean (class or producer) and EasyRAG's, plus `Supplier` beans; not other extensions' synthetic augmentors or qualified ones; "no retrieval → no record"; artifact list adds the deployment module only implicitly (users depend on `casehub-langchain4j-tracking`). Contributor guide module table: `tracking-deployment`. ARC42/README if they list modules.
+- [ ] `mvn clean install` → BUILD SUCCESS. **Commit** `docs(tracking): Quarkus extension and retrieval-ran rule` (`Refs #28`).
