@@ -58,6 +58,7 @@ public class TrackingContentRetriever implements ContentRetriever {
     public List<Content> retrieve(Query query) {
         List<Content> contents = delegate.retrieve(query);
         if (RetrievalRecorder.markedByAugmentor(query)) {
+            RetrievalRecorder.countStoodDown(query);
             return contents;  // a TrackingRetrievalAugmentor records the question once
         }
         try {

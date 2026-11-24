@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.jboss.logging.Logger;
@@ -48,14 +49,35 @@ final class RetrievalRecorder {
         this.log = log;
     }
 
+    /** Counter of retrievals that stood down for a {@link TrackingRetrievalAugmentor}. */
+    static final String RETRIEVALS_KEY = TrackingRetrievalAugmentor.TRACKED_BY_AUGMENTOR_KEY + ".retrievals";
+
     /** Whether {@link TrackingRetrievalAugmentor} is recording the question this query belongs to. */
     static boolean markedByAugmentor(Query query) {
+        InvocationParameters parameters = parameters(query);
+        return parameters != null && parameters.containsKey(TrackingRetrievalAugmentor.TRACKED_BY_AUGMENTOR_KEY);
+    }
+
+    /** Tells the augmentor a retrieval ran (and stood down) for its question. */
+    static void countStoodDown(Query query) {
+        InvocationParameters parameters = parameters(query);
+        if (parameters == null) {
+            return;
+        }
+        synchronized (parameters) {
+            AtomicInteger retrievals = parameters.get(RETRIEVALS_KEY);
+            if (retrievals != null) {
+                retrievals.incrementAndGet();
+            }
+        }
+    }
+
+    private static InvocationParameters parameters(Query query) {
         if (query == null || query.metadata() == null) {
-            return false;
+            return null;
         }
         InvocationContext context = query.metadata().invocationContext();
-        InvocationParameters parameters = context == null ? null : context.invocationParameters();
-        return parameters != null && parameters.containsKey(TrackingRetrievalAugmentor.TRACKED_BY_AUGMENTOR_KEY);
+        return context == null ? null : context.invocationParameters();
     }
 
     /**
