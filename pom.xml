@@ -37,6 +37,7 @@
         <module>crag-spring</module>
         <module>tracking-core</module>
         <module>tracking</module>
+        <module>tracking-deployment</module>
         <module>tracking-spring</module>
         <module>bom</module>
         <module>examples</module>
