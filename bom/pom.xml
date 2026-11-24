@@ -116,6 +116,11 @@
             </dependency>
             <dependency>
                 <groupId>io.casehub.langchain4j</groupId>
+                <artifactId>casehub-langchain4j-tracking-deployment</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.casehub.langchain4j</groupId>
                 <artifactId>casehub-langchain4j-tracking-spring</artifactId>
                 <version>${project.version}</version>
             </dependency>

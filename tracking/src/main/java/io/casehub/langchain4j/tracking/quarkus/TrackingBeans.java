@@ -10,7 +10,6 @@ import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.quarkus.arc.InjectableBean;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.Dependent;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
@@ -42,6 +41,9 @@ public class TrackingBeans {
 
     /** This module's alternative priority; above CRAG's so tracking is the outermost decorator. */
     public static final int PRIORITY = 300;
+
+    /** Name of the synthetic tracking augmentor the deployment module registers ({@code @Named} keeps {@code @Default}). */
+    public static final String AUGMENTOR_BEAN_NAME = "casehubLangchain4jTrackingAugmentor";
 
     /** Tenant recorded when the application has no {@link CurrentPrincipal} (a single-tenant app). */
     static final String DEFAULT_TENANT = "default";
@@ -91,22 +93,16 @@ public class TrackingBeans {
     }
 
     /**
-     * Makes quarkus-langchain4j's default augmentor lookup (a {@link RetrievalAugmentor} bean, if one
-     * exists) get a {@link TrackingRetrievalAugmentor} around the application's augmentor bean: one
-     * record per question, also when the augmentor rewrites queries.
-     *
-     * <p>{@code @Dependent} so that it can return {@code null}: this producer exists whether or not
-     * the application has an augmentor, and without one the AI service must get none, as it would
-     * without this module.
+     * The application's augmentor (the bean ArC would inject without this module), wrapped for
+     * tracking. Called by the synthetic bean the deployment module registers only when such a bean
+     * resolves, or when EasyRAG registers one.
      */
-    // keepAlive is not read: it is the injection point that keeps the application's augmentor beans.
-    @Produces
-    @Alternative
-    @Priority(PRIORITY)
-    @Dependent
-    public RetrievalAugmentor trackingRetrievalAugmentor(@Any Instance<RetrievalAugmentor> keepAlive) {
+    public RetrievalAugmentor trackedApplicationAugmentor() {
         RetrievalAugmentor delegate = resolvedBean(RetrievalAugmentor.class);
-        return delegate == null ? null : track(delegate);
+        if (delegate == null) {
+            throw new UnsatisfiedResolutionException("casehub-langchain4j-tracking found no RetrievalAugmentor bean to track");
+        }
+        return track(delegate);
     }
 
     /** The augmentor wrapped for tracking, or as is when there is no tracker or it is already wrapped. */
@@ -157,7 +153,7 @@ public class TrackingBeans {
     /** The bean of {@code type} ArC would inject if this module were absent; {@code null} if there is none. */
     private <T> T resolvedBean(Class<T> type) {
         List<Bean<?>> candidates = narrow(beanManager.getBeans(type, Any.Literal.INSTANCE).stream()
-                .filter(b -> b.getBeanClass() != TrackingBeans.class)
+                .filter(b -> b.getBeanClass() != TrackingBeans.class && !AUGMENTOR_BEAN_NAME.equals(b.getName()))
                 .toList());
         if (candidates.isEmpty()) {
             return null;

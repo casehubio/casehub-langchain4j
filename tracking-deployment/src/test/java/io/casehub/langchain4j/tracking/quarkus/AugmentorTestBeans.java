@@ -4,6 +4,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.invocation.InvocationParameters;
 import dev.langchain4j.rag.AugmentationRequest;
+import dev.langchain4j.rag.AugmentationResult;
 import dev.langchain4j.rag.DefaultRetrievalAugmentor;
 import dev.langchain4j.rag.RetrievalAugmentor;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
@@ -11,6 +12,8 @@ import dev.langchain4j.rag.query.Metadata;
 import dev.langchain4j.rag.query.Query;
 import io.quarkus.arc.properties.IfBuildProperty;
 import jakarta.enterprise.context.ApplicationScoped;
+import io.smallrye.common.annotation.Identifier;
+import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
@@ -81,6 +84,47 @@ public final class AugmentorTestBeans {
         @Override
         public RetrievalAugmentor get() {
             return augmentor;
+        }
+    }
+
+    @ApplicationScoped
+    @IfBuildProperty(name = "casehub.test.augmentor", stringValue = "class-bean")
+    public static class AppClassAugmentor implements RetrievalAugmentor {
+        @Inject
+        ContentRetriever retriever;
+
+        @Override
+        public AugmentationResult augment(AugmentationRequest request) {
+            return rewriting(retriever).augment(request);
+        }
+    }
+
+    @ApplicationScoped
+    @IfBuildProperty(name = "casehub.test.augmentor", stringValue = "qualified")
+    public static class QualifiedAugmentor {
+        @Produces
+        @Singleton
+        @Identifier("a")
+        RetrievalAugmentor qualified(ContentRetriever retriever) {
+            return rewriting(retriever);
+        }
+    }
+
+    @ApplicationScoped
+    @IfBuildProperty(name = "casehub.test.augmentor", stringValue = "two")
+    public static class TwoAugmentors {
+        @Produces
+        @Singleton
+        RetrievalAugmentor first(ContentRetriever retriever) {
+            return rewriting(retriever);
+        }
+
+        @Produces
+        @Singleton
+        @Default
+        @Identifier("second")
+        RetrievalAugmentor second(ContentRetriever retriever) {
+            return rewriting(retriever);
         }
     }
 }

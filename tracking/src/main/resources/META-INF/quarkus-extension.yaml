@@ -1,0 +1,10 @@
+---
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
+name: "CaseHub LangChain4j Retrieval Tracking"
+description: "Records LangChain4j retrievals into neocortex's RetrievalTracker — one record per question"
+metadata:
+  keywords:
+    - "langchain4j"
+    - "rag"
+    - "retrieval-tracking"
+  unlisted: true

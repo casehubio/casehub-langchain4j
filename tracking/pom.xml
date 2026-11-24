@@ -14,7 +14,7 @@
     <artifactId>casehub-langchain4j-tracking</artifactId>
     <packaging>jar</packaging>
     <name>CaseHub LangChain4j :: Retrieval Tracking (Quarkus)</name>
-    <description>Quarkus wiring for retrieval tracking: wraps the application's ContentRetriever.</description>
+    <description>Quarkus extension (runtime) for retrieval tracking: wraps the application's ContentRetriever and RetrievalAugmentor.</description>
 
     <dependencies>
         <dependency>
@@ -35,33 +35,26 @@
             <artifactId>quarkus-arc</artifactId>
         </dependency>
 
-        <!-- Test -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-junit</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.casehub.langchain4j</groupId>
-            <artifactId>casehub-langchain4j-tracking-core</artifactId>
-            <version>${project.version}</version>
-            <type>test-jar</type>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.casehub.langchain4j</groupId>
-            <artifactId>casehub-langchain4j-tenancy</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.casehub.langchain4j</groupId>
-            <artifactId>casehub-langchain4j-crag</artifactId>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-extension-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>extension-descriptor</goal>
+                        </goals>
+                        <configuration>
+                            <deployment>${project.groupId}:${project.artifactId}-deployment:${project.version}</deployment>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
