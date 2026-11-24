@@ -32,9 +32,6 @@ class TrackingQualifiedAugmentorTest {
     @Inject
     Instance<RetrievalAugmentor> augmentors;
 
-    @Inject
-    TrackingTestBeans.TestTracker tracker;
-
     @Test
     void qualifiedOnly_defaultUnresolvable() {
         // default AI services get no augmentor, as without this module

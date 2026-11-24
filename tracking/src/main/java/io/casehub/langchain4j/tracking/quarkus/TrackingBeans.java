@@ -56,6 +56,8 @@ public class TrackingBeans {
     @Inject
     Instance<RetrievalTracker> trackers;
 
+    private final AtomicBoolean reportedNoTracker = new AtomicBoolean();
+
     @Inject
     Instance<CurrentPrincipal> principals;
 
@@ -122,7 +124,9 @@ public class TrackingBeans {
                     + " with the highest priority");
         }
         if (!trackers.isResolvable()) {
-            LOG.info("casehub-langchain4j-tracking: no RetrievalTracker bean — the retrieval augmentor is not tracked");
+            if (reportedNoTracker.compareAndSet(false, true)) {
+                LOG.info("casehub-langchain4j-tracking: no RetrievalTracker bean — the retrieval augmentor is not tracked");
+            }
             return delegate;
         }
         return new TrackingRetrievalAugmentor(delegate, trackers.get(), corpusName, tenant(principals),

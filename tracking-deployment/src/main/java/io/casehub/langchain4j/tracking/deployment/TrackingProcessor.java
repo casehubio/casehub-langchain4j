@@ -8,6 +8,7 @@ import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BeanResolver;
 import io.quarkus.arc.processor.DotNames;
+import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -87,11 +88,6 @@ public class TrackingProcessor {
     }
 
     private static boolean easyRagPresent() {
-        try {
-            Class.forName(EASY_RAG_AUGMENTOR, false, Thread.currentThread().getContextClassLoader());
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
+        return QuarkusClassLoader.isClassPresentAtRuntime(EASY_RAG_AUGMENTOR);
     }
 }
