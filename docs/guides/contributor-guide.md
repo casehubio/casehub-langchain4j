@@ -19,8 +19,9 @@
 | `crag-core` | `casehub-langchain4j-crag-core` | `io.casehub.langchain4j.crag` | Pure Java: `CragContentRetriever` (grades via neocortex `RelevanceEvaluator`), `CragRetrievalQuality` |
 | `crag` | `casehub-langchain4j-crag` | `io.casehub.langchain4j.crag.quarkus` | CDI: `@Alternative @Priority(200)` producer wrapping the resolved `ContentRetriever` (outside tenancy's 100) |
 | `crag-spring` | `casehub-langchain4j-crag-spring` | `io.casehub.langchain4j.crag.spring` | Spring: late-ordered `BeanPostProcessor` (after tenancy's early one) |
-| `tracking-core` | `casehub-langchain4j-tracking-core` | `io.casehub.langchain4j.tracking` | Pure Java: `TrackingContentRetriever` (records into neocortex `RetrievalTracker`); test-jar `RecordingTracker` |
-| `tracking` | `casehub-langchain4j-tracking` | `io.casehub.langchain4j.tracking.quarkus` | CDI: `@Alternative @Priority(300)` producer wrapping the resolved `ContentRetriever` (outside crag's 200) |
+| `tracking-core` | `casehub-langchain4j-tracking-core` | `io.casehub.langchain4j.tracking` | Pure Java: `TrackingContentRetriever`, `TrackingRetrievalAugmentor` (one record per question), `RetrievalIdAwareContentAggregator`; test-jar `RecordingTracker` |
+| `tracking` | `casehub-langchain4j-tracking` | `io.casehub.langchain4j.tracking.quarkus` | Quarkus extension runtime: `@Alternative @Priority(300)` producer wrapping the resolved `ContentRetriever` (outside crag's 200); decorator on `Supplier<RetrievalAugmentor>`; creator for the tracking augmentor |
+| `tracking-deployment` | `casehub-langchain4j-tracking-deployment` | `io.casehub.langchain4j.tracking.deployment` | Build step: synthetic tracking `RetrievalAugmentor` only when exactly one `@Default` augmentor resolves (or EasyRAG registers one); holds the Quarkus tests |
 | `tracking-spring` | `casehub-langchain4j-tracking-spring` | `io.casehub.langchain4j.tracking.spring` | Spring: `BeanPostProcessor` ordered after crag's; skips the hybrid-search bean |
 | `bom` | `casehub-langchain4j-bom` | — | Maven BOM importing all published modules |
 | `examples` | `casehub-langchain4j-examples` | `io.casehub.langchain4j.examples` | Working demos. Not published (`maven.deploy.skip=true`). |
