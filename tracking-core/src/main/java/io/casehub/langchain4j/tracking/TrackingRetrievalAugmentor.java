@@ -98,7 +98,8 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
     }
 
     /**
-     * Counts nested or concurrent calls sharing one {@code InvocationParameters}; returns the number of
+     * Counts nested or concurrent calls sharing one {@code InvocationParameters} (synchronizing on that
+     * caller-owned object); returns the number of
      * stood-down retrievals so far (calls sharing the object share that count — an approximation that
      * only matters for telling "nothing retrieved" from "nothing found").
      */
@@ -133,19 +134,7 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
     private static AugmentationRequest withFreshParameters(AugmentationRequest request) {
         Metadata metadata = request.metadata();
         InvocationContext context = metadata.invocationContext();
-        InvocationContext copy = InvocationContext.builder()
-                .invocationId(context.invocationId())
-                .interfaceName(context.interfaceName())
-                .methodName(context.methodName())
-                .methodArguments(context.methodArguments())
-                .userMessage(context.userMessage())
-                .chatMemoryId(context.chatMemoryId())
-                .defaultRequestParameters(context.defaultRequestParameters())
-                .modelProvider(context.modelProvider())
-                .managedParameters(context.managedParameters())
-                .timestamp(context.timestamp())
-                .invocationParameters(new InvocationParameters())
-                .build();
+        InvocationContext copy = context.toBuilder().invocationParameters(new InvocationParameters()).build();
         Metadata copied = Metadata.builder()
                 .chatMessage(metadata.chatMessage())
                 .systemMessage(metadata.systemMessage())

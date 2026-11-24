@@ -32,9 +32,6 @@ class TrackingTwoAugmentorsTest {
     @Inject
     Instance<RetrievalAugmentor> augmentors;
 
-    @Inject
-    TrackingTestBeans.TestTracker tracker;
-
     @Test
     void twoDefaults_appStarts_unresolvable() {
         // ArC itself reports ambiguity; quarkus-langchain4j then gives default AI services none
