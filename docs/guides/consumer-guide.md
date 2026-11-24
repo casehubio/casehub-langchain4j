@@ -374,11 +374,13 @@ List<QueryQualitySignal> zeroHits = RetrievalAnalyzer.zeroHitQueries(tracker, co
 (`ExpandingQueryTransformer`, `CompressingQueryTransformer`, a HyDE or step-back transformer of your
 own) calls the retrievers once per rewritten query. Tracking therefore also wraps your
 `RetrievalAugmentor` bean: each question is recorded **once**, under the user's message text, with
-the contents after aggregation — the retrievers inside stand down. An augmentation that calls no
-retriever at all (a router that skips retrieval for small talk) is not recorded, so it cannot read
-as a zero-hit question. Spring wraps every `RetrievalAugmentor` bean. On Quarkus the module is an
+the contents after aggregation — the retrievers inside stand down. When the augmentor's retrievers are
+tracked beans, an augmentation that calls none of them (a router that skips retrieval for small
+talk) is not recorded, so it cannot read as a zero-hit question; when no `ContentRetriever` bean is
+tracked (retrievers built inline, EasyRAG), every empty augmentation is recorded as zero-hit. Spring wraps every `RetrievalAugmentor` bean. On Quarkus the module is an
 extension: at build time it wraps the `RetrievalAugmentor` that quarkus-langchain4j's default lookup
-finds — the one `@Default` augmentor bean (a class or a `@Produces` method), or EasyRAG's — and,
+finds — the one `@Default` augmentor bean (a class or a `@Produces` method), or EasyRAG's when
+EasyRAG creates one (it does not when you declare any augmentor or augmentor supplier) — and,
 at runtime, the augmentor a `Supplier<RetrievalAugmentor>` bean hands out
 (`@RegisterAiService(retrievalAugmentor = MySupplier.class)`). With no `@Default` augmentor, or
 several, nothing changes for your AI services. The retrieval ID reaches you in the AI service's

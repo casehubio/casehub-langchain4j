@@ -321,4 +321,15 @@ class TrackingRetrievalAugmentorTest {
 
         assertThat(tracker.records).hasSize(1);
     }
+
+    @Test
+    void untrackedRetrievers_emptyResult_zeroHitRecorded() {
+        // e.g. EasyRAG: its retriever is not a bean, so nothing counts retrievals
+        var augmentor = new TrackingRetrievalAugmentor(inner(q -> List.of()).build(), tracker, "kb", () -> "a",
+                events::add, false);
+
+        augmentor.augment(request());
+
+        assertThat(tracker.records).singleElement().satisfies(r -> assertThat(r.chunks()).isEmpty());
+    }
 }

@@ -105,6 +105,12 @@ public class TrackingBeans {
         return track(delegate);
     }
 
+    /** Whether the application has a ContentRetriever bean this module wraps, so retrievals can be counted. */
+    private boolean retrieversTracked() {
+        return beanManager.getBeans(ContentRetriever.class, Any.Literal.INSTANCE).stream()
+                .anyMatch(b -> b.getBeanClass() != TrackingBeans.class);
+    }
+
     /** The augmentor wrapped for tracking, or as is when there is no tracker or it is already wrapped. */
     RetrievalAugmentor track(RetrievalAugmentor delegate) {
         if (delegate instanceof TrackingRetrievalAugmentor) {
@@ -120,7 +126,7 @@ public class TrackingBeans {
             return delegate;
         }
         return new TrackingRetrievalAugmentor(delegate, trackers.get(), corpusName, tenant(principals),
-                recordedEvents::fire);
+                recordedEvents::fire, retrieversTracked());
     }
 
     /** Tenant per retrieval: the principal's tenancy ID (blank → {@code null}, not recorded), else {@value #DEFAULT_TENANT}. */

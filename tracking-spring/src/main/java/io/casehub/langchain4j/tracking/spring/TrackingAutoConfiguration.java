@@ -10,6 +10,9 @@ import io.casehub.platform.api.identity.CurrentPrincipal;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.jboss.logging.Logger;
+import org.springframework.beans.factory.BeanFactory;
+import org.springframework.beans.factory.BeanFactoryAware;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -57,7 +60,7 @@ public class TrackingAutoConfiguration {
         return new TrackingBeanPostProcessor(tracker, principal, events, environment);
     }
 
-    static final class TrackingBeanPostProcessor implements BeanPostProcessor, Ordered {
+    static final class TrackingBeanPostProcessor implements BeanPostProcessor, Ordered, BeanFactoryAware {
 
         private static final Logger LOG = Logger.getLogger(TrackingBeanPostProcessor.class);
 
@@ -67,6 +70,25 @@ public class TrackingAutoConfiguration {
         private final Environment environment;
         private final AtomicBoolean reportedDefaultTenant = new AtomicBoolean();
         private final AtomicBoolean warnedBlankTenant = new AtomicBoolean();
+        private ListableBeanFactory beanFactory;
+
+        @Override
+        public void setBeanFactory(BeanFactory beanFactory) {
+            this.beanFactory = beanFactory instanceof ListableBeanFactory listable ? listable : null;
+        }
+
+        /** Whether some ContentRetriever bean is wrapped, so an augmentor's retrievals can be counted. */
+        private boolean retrieversTracked() {
+            if (beanFactory == null) {
+                return true;
+            }
+            for (String name : beanFactory.getBeanNamesForType(ContentRetriever.class, true, false)) {
+                if (!HYBRID_BEAN_NAME.equals(name)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         TrackingBeanPostProcessor(ObjectProvider<RetrievalTracker> tracker, ObjectProvider<CurrentPrincipal> principal,
                 ObjectProvider<ApplicationEventPublisher> events, Environment environment) {
@@ -86,7 +108,8 @@ public class TrackingAutoConfiguration {
             if (bean instanceof RetrievalAugmentor augmentor && !(bean instanceof TrackingRetrievalAugmentor)) {
                 RetrievalTracker current = tracker(beanName, "RetrievalAugmentor");
                 return current == null ? bean
-                        : new TrackingRetrievalAugmentor(augmentor, current, corpus(), tenant(), this::publish);
+                        : new TrackingRetrievalAugmentor(augmentor, current, corpus(), tenant(), this::publish,
+                                retrieversTracked());
             }
             if (!(bean instanceof ContentRetriever retriever) || bean instanceof TrackingContentRetriever
                     || bean instanceof RetrievalTracker || HYBRID_BEAN_NAME.equals(beanName)) {
