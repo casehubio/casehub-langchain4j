@@ -14,8 +14,11 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
 import jakarta.inject.Singleton;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassType;
+import org.jboss.jandex.ParameterizedType;
+import org.jboss.jandex.Type;
 
 /**
  * Tracks the application's {@link RetrievalAugmentor} — the bean quarkus-langchain4j's default lookup
@@ -42,8 +45,8 @@ public class TrackingProcessor {
         // An unqualified injection point means @Default; resolveBeans without qualifiers matches any.
         Set<BeanInfo> found = resolver.resolveBeans(ClassType.create(RetrievalAugmentor.class),
                 AnnotationInstance.builder(DotNames.DEFAULT).build());
-        boolean track = found.isEmpty() ? easyRagPresent() : resolvesToOne(resolver, found);
-        if (!track) {
+        if (!shouldTrack(!found.isEmpty() && resolvesToOne(resolver, found), anyAugmentorOrSupplier(beans),
+                easyRagPresent())) {
             return;
         }
         // Declared as the interface: without a tracker the creator returns the application's augmentor as is.
@@ -56,6 +59,23 @@ public class TrackingProcessor {
                 .creator(TrackingAugmentorCreator.class)
                 .unremovable()
                 .done());
+    }
+
+    /**
+     * @param defaultResolvesToOne an unqualified injection of RetrievalAugmentor resolves to one bean
+     * @param anyAugmentorOrSupplier some bean has type RetrievalAugmentor or Supplier&lt;RetrievalAugmentor&gt;,
+     *        qualified or not — EasyRAG's own condition for <em>not</em> registering its augmentor
+     * @param easyRag EasyRAG is on the classpath
+     */
+    static boolean shouldTrack(boolean defaultResolvesToOne, boolean anyAugmentorOrSupplier, boolean easyRag) {
+        return defaultResolvesToOne || (easyRag && !anyAugmentorOrSupplier);
+    }
+
+    /** EasyRAG's check, copied: it skips registering when any such bean exists. */
+    private static boolean anyAugmentorOrSupplier(BeanDiscoveryFinishedBuildItem beans) {
+        Type augmentor = ClassType.create(RetrievalAugmentor.class);
+        Type supplier = ParameterizedType.create(Supplier.class, augmentor);
+        return beans.getBeans().stream().anyMatch(b -> b.getTypes().contains(augmentor) || b.getTypes().contains(supplier));
     }
 
     private static boolean resolvesToOne(BeanResolver resolver, Set<BeanInfo> found) {
