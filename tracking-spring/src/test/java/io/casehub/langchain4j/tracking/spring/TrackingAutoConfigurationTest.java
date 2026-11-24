@@ -238,4 +238,23 @@ class TrackingAutoConfigurationTest {
                 .run(context -> assertThat(((TrackingRetrievalAugmentor) context.getBean(RetrievalAugmentor.class)).delegate())
                         .isNotInstanceOf(TrackingRetrievalAugmentor.class));
     }
+
+    @Configuration(proxyBeanMethods = false)
+    static class InlineRetrieverAugmentorConfig {
+        @Bean
+        RetrievalAugmentor appAugmentor() {
+            // retriever built inline, not a bean: nothing counts its retrievals
+            return DefaultRetrievalAugmentor.builder().contentRetriever(query -> List.of()).executor(Runnable::run).build();
+        }
+    }
+
+    @Test
+    void inlineRetrieverFindsNothing_zeroHitRecorded() {
+        runner.withUserConfiguration(TrackerConfig.class, InlineRetrieverAugmentorConfig.class).run(context -> {
+            context.getBean(RetrievalAugmentor.class).augment(question());
+
+            assertThat(context.getBean(RecordingTracker.class).records).singleElement()
+                    .satisfies(r -> assertThat(r.chunks()).isEmpty());
+        });
+    }
 }

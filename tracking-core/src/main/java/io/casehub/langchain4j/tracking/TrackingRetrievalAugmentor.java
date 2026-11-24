@@ -37,6 +37,7 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
 
     private final RetrievalAugmentor delegate;
     private final RetrievalRecorder recorder;
+    private final boolean retrieversTracked;
 
     /**
      * @param tenantId the tenant to record under, read per question; {@code null} or blank means the
@@ -44,8 +45,20 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
      */
     public TrackingRetrievalAugmentor(RetrievalAugmentor delegate, RetrievalTracker tracker, String corpusName,
             Supplier<String> tenantId, Consumer<RetrievalRecorded> recorded) {
+        this(delegate, tracker, corpusName, tenantId, recorded, true);
+    }
+
+    /**
+     * @param retrieversTracked whether the augmentor's retrievers are {@link TrackingContentRetriever}s.
+     *        Only then can an empty augmentation be told apart: no retriever ran (not recorded) or one
+     *        ran and found nothing (a zero-hit record). With {@code false} every empty augmentation is
+     *        recorded as zero-hit — for augmentors with retrievers built inline (EasyRAG).
+     */
+    public TrackingRetrievalAugmentor(RetrievalAugmentor delegate, RetrievalTracker tracker, String corpusName,
+            Supplier<String> tenantId, Consumer<RetrievalRecorded> recorded, boolean retrieversTracked) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.recorder = new RetrievalRecorder(tracker, corpusName, tenantId, recorded, LOG);
+        this.retrieversTracked = retrieversTracked;
     }
 
     /** The augmentor this one records for. */
@@ -72,7 +85,7 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
         if (result == null || result.contents() == null) {
             return result;
         }
-        if (retrievals <= 0 && result.contents().isEmpty()) {
+        if (retrieversTracked && retrievals <= 0 && result.contents().isEmpty()) {
             return result;  // nothing was retrieved: not a zero-hit question
         }
         try {
