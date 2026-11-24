@@ -213,6 +213,43 @@ Consumer guide "tracking" section: rewriting augmentors, what is recorded, the m
 CRAG's behaviour with transformers; wrapping a non-bean augmentor by hand. ARC42 C9 key classes.
 Retrieval tracking spec: note superseding the N-records behaviour.
 
+## Revision 2026-11-24 — Quarkus wiring as an extension (owner's decision)
+
+The final review proved the `@Dependent` null-returning producer wrong:
+`AiServices.retrievalAugmentor(null)` calls `ensureNotNull` (LangChain4j 1.19.0, 1.20.2), so with
+quarkus-langchain4j's default lookup every AI service of an application **without** an augmentor
+would fail to build. The copied `narrow` fallback could also hand a qualified-only augmentor to
+default AI services, or fail where ArC reports ambiguity. Asked, the owner chose a **Quarkus
+extension**, which supersedes the *Quarkus* bullet of *Framework wiring*:
+
+- `tracking` becomes the extension's **runtime** module (extension descriptor via
+  `quarkus-extension-maven-plugin`, `META-INF/quarkus-extension.yaml`); a new
+  **`tracking-deployment`** module (`casehub-langchain4j-tracking-deployment`, BOM entry) holds
+  `TrackingProcessor` — the layout casehub-ledger and casehub-work use. Tests stay in the runtime
+  module as `@QuarkusTest` (ledger does the same).
+- **Build step** (`BeanDiscoveryFinishedBuildItem` → `SyntheticBeanBuildItem`, the pattern
+  quarkus-langchain4j and its EasyRAG use): resolve `RetrievalAugmentor` with `@Default` through
+  ArC's own `BeanResolver` (`resolveBeans`, then `resolveAmbiguity`). Exactly one → register a
+  synthetic `RetrievalAugmentor` bean, `@Alternative @Priority(300)`, `@Singleton`, implementation
+  class `TrackingRetrievalAugmentor`, whose runtime creator returns
+  `TrackingBeans.trackedApplicationAugmentor()` (the bean ArC would otherwise inject, wrapped;
+  unwrapped when there is no tracker). None or ambiguous → register **nothing**: quarkus-langchain4j
+  sees exactly what it saw without this module.
+- **EasyRAG**: it registers its own synthetic augmentor from the same build item when no other
+  exists, so the step above cannot see it. When EasyRAG is on the classpath
+  (`io.quarkiverse.langchain4j.easyrag.runtime.EasyRetrievalAugmentor`) and no application
+  augmentor resolves, the step registers the tracking bean too; at runtime it wraps EasyRAG's.
+  Other extensions' synthetic augmentors are not covered (documented).
+- The `@Dependent` producer is removed. `TrackingAugmentorSupplierDecorator` stays.
+- Tests: no augmentor → `Instance<RetrievalAugmentor>` **unresolvable** (the real lookup then
+  gives the AI service none); one `@Default` augmentor (class bean and producer bean) → tracking;
+  a qualified-only augmentor → unresolvable; two `@Default` augmentors → unresolvable, app starts;
+  no tracker → the app's augmentor injected unwrapped.
+
+Also from the final review, fixed with this revision: **record only when a retrieval ran** — the
+marker counts retriever calls that stood down; an augmentation that called no retriever (a router
+that skips retrieval for small talk) is not recorded, so it cannot read as a false zero-hit.
+
 ## Review note (builder check, 2026-11-23)
 
 A fresh reviewer read this design against the code. Fixed: there is no request without an
