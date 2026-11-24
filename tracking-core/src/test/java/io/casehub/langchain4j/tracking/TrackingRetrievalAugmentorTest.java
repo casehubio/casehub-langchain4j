@@ -332,4 +332,34 @@ class TrackingRetrievalAugmentorTest {
 
         assertThat(tracker.records).singleElement().satisfies(r -> assertThat(r.chunks()).isEmpty());
     }
+
+    @Test
+    void multimodalMessage_retrieversRecordAsBefore() {
+        UserMessage multimodal = UserMessage.from(dev.langchain4j.data.message.TextContent.from("what is in"),
+                dev.langchain4j.data.message.ImageContent.from("https://example.com/cat.png"));
+        var req = new AugmentationRequest(multimodal, dev.langchain4j.rag.query.Metadata.builder().chatMessage(multimodal)
+                .invocationContext(InvocationContext.builder().invocationParameters(new InvocationParameters()).build())
+                .build());
+        ContentRetriever retriever = tracked(q -> List.of(doc("p", "doc-1")));
+        // a custom augmentor that accepts multimodal messages and retrieves with its own query
+        RetrievalAugmentor custom = r -> AugmentationResult.builder().chatMessage(r.chatMessage())
+                .contents(retriever.retrieve(Query.from("cat", r.metadata()))).build();
+
+        tracking(custom).augment(req);
+
+        assertThat(tracker.records).singleElement().satisfies(r -> assertThat(r.query().text()).isEqualTo("cat"));
+    }
+
+    @Test
+    void blankTenant_upstreamIdsStillCopied() {
+        Content upstream = Content.from(TextSegment.from("hybrid",
+                Metadata.from(Map.of("source_document_id", "doc-1", "_trackingId", "t-9"))));
+        RetrievalAugmentor stub = r -> AugmentationResult.builder().chatMessage(r.chatMessage())
+                .contents(List.of(upstream, doc("plain", "doc-2"))).build();
+
+        AugmentationResult result = tracking(stub, () -> " ").augment(request());
+
+        assertThat(tracker.records).isEmpty();
+        assertThat(retrievalId(result.contents().get(0))).isEqualTo("t-9");
+    }
 }

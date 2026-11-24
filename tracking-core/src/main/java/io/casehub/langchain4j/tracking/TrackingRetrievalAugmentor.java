@@ -68,8 +68,8 @@ public class TrackingRetrievalAugmentor implements RetrievalAugmentor {
 
     @Override
     public AugmentationResult augment(AugmentationRequest request) {
-        if (!(request.chatMessage() instanceof UserMessage user)) {
-            return delegate.augment(request);
+        if (!(request.chatMessage() instanceof UserMessage user) || !user.hasSingleText()) {
+            return delegate.augment(request);  // no question text to record: the retrievers record as before
         }
         InvocationParameters parameters = request.metadata().invocationParameters();
         AugmentationRequest marked = parameters == null ? withFreshParameters(request) : request;

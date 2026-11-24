@@ -95,11 +95,11 @@ final class RetrievalRecorder {
                 ? contents.stream().filter(c -> !alreadyTracked(c)).toList()
                 : contents;
         if (queryText == null || queryText.isBlank()) {
-            return contents;
+            return withUpstreamIds(contents);
         }
         String tenant = tenantId.get();
         if (tenant == null || tenant.isBlank()) {
-            return contents;
+            return withUpstreamIds(contents);
         }
         List<RetrievedChunk> chunks = new ArrayList<>();
         boolean missingDocumentId = false;
@@ -120,7 +120,7 @@ final class RetrievalRecorder {
                     + " — set it at ingestion to track those documents", SOURCE_DOCUMENT_ID);
         }
         if (!toRecord.isEmpty() && chunks.isEmpty()) {
-            return contents.stream().map(RetrievalRecorder::withUpstreamId).toList();  // an empty record would read as a false zero-hit query
+            return withUpstreamIds(contents);  // an empty record would read as a false zero-hit query
         }
         RetrievalQuery retrievalQuery = RetrievalQuery.of(queryText);
         CorpusRef corpus = new CorpusRef(tenant, corpusName);
@@ -134,6 +134,10 @@ final class RetrievalRecorder {
             log.warnf(e, "Retrieval tracking: RetrievalRecorded listener failed — retrieval %s is recorded", retrievalId);
         }
         return stamped;
+    }
+
+    private static List<Content> withUpstreamIds(List<Content> contents) {
+        return contents.stream().map(RetrievalRecorder::withUpstreamId).toList();
     }
 
     static boolean alreadyTracked(Content content) {
