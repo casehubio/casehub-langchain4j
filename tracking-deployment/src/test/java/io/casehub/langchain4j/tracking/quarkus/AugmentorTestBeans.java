@@ -11,13 +11,16 @@ import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.rag.query.Metadata;
 import dev.langchain4j.rag.query.Query;
 import io.quarkus.arc.properties.IfBuildProperty;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
 import io.smallrye.common.annotation.Identifier;
 import jakarta.enterprise.inject.Default;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /** Application augmentors, each switched on by a test profile's {@code casehub.test.augmentor}. */
@@ -96,6 +99,26 @@ public final class AugmentorTestBeans {
         @Override
         public AugmentationResult augment(AugmentationRequest request) {
             return rewriting(retriever).augment(request);
+        }
+    }
+
+    /** A {@code @Dependent} augmentor counting its {@code @PreDestroy} calls. */
+    @Dependent
+    @IfBuildProperty(name = "casehub.test.augmentor", stringValue = "dependent")
+    public static class DependentAugmentor implements RetrievalAugmentor {
+        static final AtomicInteger DESTROYED = new AtomicInteger();
+
+        @Inject
+        ContentRetriever retriever;
+
+        @Override
+        public AugmentationResult augment(AugmentationRequest request) {
+            return rewriting(retriever).augment(request);
+        }
+
+        @PreDestroy
+        void destroy() {
+            DESTROYED.incrementAndGet();
         }
     }
 

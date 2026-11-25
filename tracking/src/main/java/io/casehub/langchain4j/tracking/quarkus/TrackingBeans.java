@@ -8,8 +8,11 @@ import io.casehub.neocortex.rag.RetrievalRecorded;
 import io.casehub.neocortex.rag.RetrievalTracker;
 import io.casehub.platform.api.identity.CurrentPrincipal;
 import io.quarkus.arc.InjectableBean;
+import io.quarkus.arc.impl.CreationalContextImpl;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.Dependent;
+import jakarta.enterprise.context.spi.CreationalContext;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.enterprise.inject.AmbiguousResolutionException;
@@ -75,7 +78,7 @@ public class TrackingBeans {
     public ContentRetriever trackingContentRetriever(@Any Instance<ContentRetriever> keepAlive,
             Instance<RetrievalTracker> tracker, Instance<CurrentPrincipal> principal, Event<RetrievalRecorded> recorded,
             @ConfigProperty(name = "casehub.langchain4j.tracking.corpus", defaultValue = "default") String corpus) {
-        ContentRetriever delegate = resolvedBean(ContentRetriever.class, false);
+        ContentRetriever delegate = resolvedBean(ContentRetriever.class, false, null);
         if (delegate == null) {
             throw new UnsatisfiedResolutionException(
                     "casehub-langchain4j-tracking found no ContentRetriever bean to track — define one, or remove the injection point");
@@ -98,9 +101,12 @@ public class TrackingBeans {
      * The application's augmentor (the bean ArC would inject without this module), wrapped for
      * tracking. Called by the synthetic bean the deployment module registers only when such a bean
      * resolves, or when EasyRAG registers one.
+     *
+     * @param context the synthetic bean's creational context: a {@code @Dependent} application augmentor
+     *        is bound to it, so it is destroyed ({@code @PreDestroy}) with the synthetic bean
      */
-    public RetrievalAugmentor trackedApplicationAugmentor() {
-        RetrievalAugmentor delegate = resolvedBean(RetrievalAugmentor.class, true);
+    public RetrievalAugmentor trackedApplicationAugmentor(CreationalContext<?> context) {
+        RetrievalAugmentor delegate = resolvedBean(RetrievalAugmentor.class, true, context);
         if (delegate == null) {
             throw new UnsatisfiedResolutionException("casehub-langchain4j-tracking found no RetrievalAugmentor bean to track");
         }
@@ -162,9 +168,10 @@ public class TrackingBeans {
 
     /**
      * The bean of {@code type} ArC would inject if this module were absent; {@code null} if there is none.
-     * {@code defaultOnly}: no fallback to qualified beans.
+     * {@code defaultOnly}: no fallback to qualified beans. {@code context}: the creational context
+     * a {@code @Dependent} bean is bound to; {@code null} for a fresh, never-released one.
      */
-    private <T> T resolvedBean(Class<T> type, boolean defaultOnly) {
+    private <T> T resolvedBean(Class<T> type, boolean defaultOnly, CreationalContext<?> context) {
         List<Bean<?>> candidates = narrow(beanManager.getBeans(type, Any.Literal.INSTANCE).stream()
                 .filter(b -> b.getBeanClass() != TrackingBeans.class && !AUGMENTOR_BEAN_NAME.equals(b.getName()))
                 .toList());
@@ -182,7 +189,19 @@ public class TrackingBeans {
                     + type.getSimpleName() + " beans and cannot tell which one an unqualified injection means");
         }
         Bean<?> bean = candidates.get(0);
+        if (context != null && bean.getScope() == Dependent.class && bean instanceof InjectableBean<?> injectable) {
+            return type.cast(dependentOf(injectable, type, context));
+        }
         return type.cast(beanManager.getReference(bean, type, beanManager.createCreationalContext(bean)));
+    }
+
+    /**
+     * A {@code @Dependent} instance bound to {@code parent}, as ArC binds one it injects: created in a
+     * child context, which ArC registers with {@code parent}, so it is destroyed (its {@code @PreDestroy}
+     * run) when {@code parent} is released.
+     */
+    private Object dependentOf(InjectableBean<?> bean, Class<?> type, CreationalContext<?> parent) {
+        return beanManager.getReference(bean, type, CreationalContextImpl.child(bean, parent));
     }
 
     /**
