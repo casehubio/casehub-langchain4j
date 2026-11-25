@@ -10,6 +10,6 @@ public class TrackingAugmentorCreator implements BeanCreator<RetrievalAugmentor>
 
     @Override
     public RetrievalAugmentor create(SyntheticCreationalContext<RetrievalAugmentor> context) {
-        return Arc.container().instance(TrackingBeans.class).get().trackedApplicationAugmentor();
+        return Arc.container().instance(TrackingBeans.class).get().trackedApplicationAugmentor(context);
     }
 }
