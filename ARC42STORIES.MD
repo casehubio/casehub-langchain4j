@@ -17,12 +17,14 @@
 
 Four phases, each telling a clear story to an LC4j developer:
 
-1. **"Your LC4j app is now enterprise-class"** — audit trails, tenant isolation, governance, resilience. Decorators and classpath activation.
-2. **"Your LC4j agents are now real distributed agents"** — structured identity (eidos), typed channels (qhorus), human-in-the-loop (work), hallucination detection (neocortex), earned trust (ledger). Novel capabilities LC4j doesn't have.
-3. **"Your LC4j app has enterprise-grade infrastructure"** — CBR memory, SPLADE embeddings, corpus management. Enterprise SPI implementations where LC4j has acknowledged gaps.
-4. **"Your LC4j agents are orchestrated by CaseHub"** — case lifecycle, execution kernel, DAG dispatch, orchestration patterns. Full platform integration.
+1. **"Your LC4j app is now enterprise-class"** — audit trails, tenant isolation, governance (oversight gate on tool calls, trust, lineage), hybrid search, CRAG quality gating, retrieval tracking. Decorators and classpath activation.
+2. **"Your LC4j agents are now real distributed agents"** — *reframed in #32.* Human-in-the-loop approval and oversight shipped inside Phase 1 governance (C4); query expansion and NLI hallucination detection were dropped; eidos identity, qhorus channels and ledger peer trust moved to Phase 4. No chapters remain in this phase.
+3. **"Your LC4j app gets capabilities nothing else on the JVM offers"** — the community pipeline (epic #35): NLP template rendering and extraction, deterministic agent simulation, CBR memory, governed MCP playbooks. These depend on neocortex and platform modules that run standalone, not on the full CaseHub platform.
+4. **"Your LC4j agents are orchestrated by CaseHub"** — case lifecycle, execution kernel, DAG dispatch, orchestration patterns, plus eidos identity, qhorus channels and peer trust as reference-architecture topics. Full platform integration.
 
-**Strategic positioning:** This work is designed for complementary engagement with the LC4j community. Phase 1+2 demonstrate value that doesn't threaten LC4j's core. The conversation opens with "here's what we built on top of your framework." Phase 4 is where natural migration happens — the developer has seen enough value that they want the full stack.
+**Strategic positioning:** This work is designed for complementary engagement with the LC4j community. Phases 1 and 3 demonstrate value that doesn't threaten LC4j's core. The conversation opens with "here's what we built on top of your framework." Phase 4 is where natural migration happens — the developer has seen enough value that they want the full stack.
+
+**Community funnel (#32):** an LC4j developer discovers the [distributions](https://github.com/casehubio/distributions) MCP server (130+ connector tools and neocortex corpus management, usable from any agent runtime) → adds casehub-langchain4j for enterprise trust on those calls (audit, governance, tenancy) → adds RAG quality (CRAG, hybrid search, tracking) and the Phase 3 modules → moves to the full platform (Phase 4).
 
 Module structure per SPI: `-core` (pure Java), bare name (Quarkus CDI), `-spring` (Spring auto-config). The ChatModel ↔ AgentProvider bridge once planned for this repo was retired in platform#638; consumers call `AgentProvider` directly.
 
@@ -95,9 +97,9 @@ C4Context
   Person_Ext(lc4jDev, "LC4j Developer", "Uses langchain4j for LLM apps")
 
   System_Boundary(clc4j, "casehub-langchain4j") {
-    System(phase1, "Phase 1: Enterprise Concerns", "Audit, tenancy, governance, hybrid search, resilience")
-    System(phase2, "Phase 2: Distributed Agent Capabilities", "Eidos identity, Qhorus channels, Work human-in-the-loop, trust")
-    System(phase34, "Phase 3+4: Infrastructure + Orchestration", "CBR memory, SPLADE, engine lifecycle, agency patterns")
+    System(phase1, "Phase 1: Enterprise Concerns", "Audit, tenancy, governance + oversight gate, hybrid search, CRAG, retrieval tracking")
+    System(phase3, "Phase 3: Community Pipeline", "NLP templating, agent simulation, CBR memory, MCP playbook guide")
+    System(phase4, "Phase 4: Platform Orchestration", "Engine lifecycle, agency patterns, eidos, qhorus, peer trust")
   }
 
   System_Ext(lc4j, "langchain4j", "ChatModel, EmbeddingStore, ContentRetriever, AiService, agentic patterns")
@@ -115,12 +117,14 @@ C4Context
   Rel(phase1, lc4j, "wraps — decorators")
   Rel(phase1, platform, "tenancy via CurrentPrincipal")
   Rel(phase1, ledger, "audit via CaseLedgerEntry")
-  Rel(phase1, neocortex, "hybrid search via CaseContextRetriever")
-  Rel(phase1, engine, "resilience via DLQ, RetryPolicy")
-  Rel(phase2, eidos, "agent identity")
-  Rel(phase2, qhorus, "typed channels")
-  Rel(phase2, work, "human-in-the-loop")
-  Rel(phase2, agency, "attestation, oversight")
+  Rel(phase1, neocortex, "hybrid search, CRAG, retrieval tracking")
+  Rel(phase1, engine, "risk classification for the oversight gate")
+  Rel(phase1, work, "tool-call approvals")
+  Rel(phase3, platform, "template registry, simulation runtime")
+  Rel(phase3, neocortex, "CBR memory")
+  Rel(phase4, eidos, "agent identity")
+  Rel(phase4, qhorus, "typed channels")
+  Rel(phase4, agency, "orchestration patterns")
 ```
 
 **Boundary rules:** casehub-langchain4j adds enterprise concerns to LC4j. It does not replace LC4j's core capabilities (model providers, stores, patterns). Domain logic and application-specific workflows belong in application-tier repos. See `STRATEGY.md` for the full positioning.
@@ -149,11 +153,10 @@ C4Context
 
 - C1 before all: scaffold establishes the repo and CI pipeline
 - C2–C5 can proceed in parallel: audit, tenancy, governance, hybrid-search are independent modules
-- C6–C9 after C1: resilience, concurrency, CRAG, tracking extend Phase 1 with engine/neocortex capabilities
-- C10–C18 after C5: Phase 2 capabilities build on the Phase 1 bridge layer being complete
-- C10–C18 are independent of each other: eidos, qhorus, work integrations can proceed in any order
-- C19–C22 after C10: Phase 3 infrastructure modules are less urgent; detail expands as Phase 3 approaches
-- C23–C30 after C18: Phase 4 requires all earlier capabilities as building blocks
+- C8–C9 after C1: CRAG and tracking extend Phase 1 with neocortex capabilities; C6 and C7 were dropped (#32)
+- Phase 2 (C10–C18) was reframed in #32: C14 and C17 shipped inside C4, C15 and C16 were dropped, C10–C13 and C18 moved to Phase 4
+- J4 (Phase 3, epic #35) in priority order: C31 NLP templating → C32 agent simulation → C19 CBR memory → C33 MCP playbook guide. Each is independent; C31 and C33 wait on upstream platform/distributions work
+- C23–C30 (and the moved C10–C13, C18) after J4: Phase 4 requires the earlier capabilities as building blocks
 
 ---
 
@@ -168,19 +171,14 @@ C4Container
     Container(tenancyCore, "tenancy-core", "Java 21", "Tenant-isolating decorators for stores/retrievers")
     Container(govCore, "governance-core", "Java 21", "GovernanceAgentListener → lineage + trust (extends audit listener)")
     Container(hsCore, "hybrid-search-core", "Java 21", "CasehubHybridContentRetriever — SPLADE + dense + RRF")
+    Container(cragCore, "crag-core", "Java 21", "CragContentRetriever — cross-encoder quality gating")
+    Container(trackingCore, "tracking-core", "Java 21", "TrackingContentRetriever + TrackingRetrievalAugmentor → RetrievalTracker")
   }
 
-  Container_Boundary(p2, "Phase 2: Distributed Agent Capabilities") {
-    Container(eidos, "eidos-identity-core", "Java 21", "Dynamic system prompt rendering, personality, reputation")
-    Container(qhorus, "qhorus-channels-core", "Java 21", "Typed inter-agent messaging, deliberation")
-    Container(workHitl, "work-hitl-core", "Java 21", "WorkItem creation, SLA, human approval")
-    Container(trust, "trust-core", "Java 21", "Attestation lifecycle, Bayesian Beta trust scores")
-  }
-
-  Container_Boundary(p3, "Phase 3: Enterprise Infrastructure") {
-    Container(cbr, "cbr-memory-core", "Java 21", "Case-based reasoning memory — different category")
-    Container(splade, "splade-embedding-core", "Java 21", "SPLADE sparse embeddings — unique JVM impl")
-    Container(corpus, "corpus-core", "Java 21", "Enterprise document lifecycle")
+  Container_Boundary(p3, "Phase 3: Community Pipeline (planned, #35)") {
+    Container(template, "template-core", "Java 21", "PromptTemplateFactory + extraction OutputGuardrail — platform template registry")
+    Container(simulation, "simulation-core", "Java 21", "SimulatedChatModel — platform simulation runtime")
+    Container(cbr, "cbr-memory-core", "Java 21", "Case-based reasoning memory — neocortex CBR")
   }
 
   Rel(govCore, auditCore, "extends CasehubAgentListener")
@@ -260,7 +258,7 @@ sequenceDiagram
   GL->>Trust: recordOutcome(agent, SOUND)
 ```
 
-### Eidos identity enriching LC4j agent
+### Eidos identity enriching LC4j agent (Phase 4 reference architecture)
 
 ```mermaid
 sequenceDiagram
@@ -287,10 +285,10 @@ sequenceDiagram
   <artifactId>casehub-langchain4j-audit</artifactId>
 </dependency>
 
-<!-- Phase 2: add agent identity -->
+<!-- add retrieval tracking -->
 <dependency>
   <groupId>io.casehub.langchain4j</groupId>
-  <artifactId>casehub-langchain4j-eidos-identity</artifactId>
+  <artifactId>casehub-langchain4j-tracking</artifactId>
 </dependency>
 
 <!-- Or pull in everything -->
@@ -318,6 +316,8 @@ Every module has a fallback chain:
 | tenancy | CurrentPrincipal → tenant isolation | — | Passthrough (single-tenant) |
 | governance | Ledger trust beans → lineage + trust | — | Lineage only |
 | hybrid-search | Neocortex RAG → full pipeline | — | Clear error on first use (an implementation, not a decorator) |
+| crag | `RelevanceEvaluator` → graded, filtered retrieval | — | Retrievers unwrapped (WARN) |
+| tracking | `RetrievalTracker` → recorded retrievals | — | Retrievers and augmentors unwrapped (INFO) |
 
 ### Tenant propagation
 
@@ -339,10 +339,12 @@ Any module beyond Phase 1 requires documented justification in its README:
 | Journey | Phase | Description | Chapters | Status |
 |---|---|---|---|---|
 | J1: Foundation | — | Scaffold, CI, BOM, workspace, docs | C1 | ✅ |
-| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, resilience, concurrency, CRAG, retrieval tracking | C2–C9 | 🚧 C2–C5, C8, C9 done |
-| J3: Distributed Agent Capabilities | 2 | Eidos identity + reputation, Qhorus channels + deliberation, Work human-in-the-loop, neocortex query expansion + NLI, agency attestation + oversight, ledger peer trust | C10–C18 | 🔲 |
-| J4: Enterprise Infrastructure | 3 | CBR memory, SPLADE embedding, corpus ingestion, temporal scoring | C19–C22 | 🔲 |
-| J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, agency patterns + protocols + prompt optimisation, full integration guide | C23–C30 | 🔲 |
+| J2: Enterprise Concerns | 1 | Audit, tenancy, governance, hybrid-search, CRAG, retrieval tracking | C2–C9 | ✅ C2–C5, C8, C9 done; C6, C7 dropped (#32) |
+| J3: Distributed Agent Capabilities | 2 | Reframed in #32 — C14, C17 shipped in C4; C15, C16 dropped; C10–C13, C18 moved to J5 | C10–C18 | ↪️ no chapters left |
+| J4: Community Pipeline | 3 | NLP templating, agent simulation, CBR memory, MCP playbook guide (epic #35) | C31, C32, C19, C33 (C20 dropped; C21, C22 parked) | 🔲 |
+| J5: Platform Orchestration | 4 | Engine case lifecycle + execution kernel + DAG + ReAct, agency patterns + protocols + prompt optimisation, full integration guide; eidos, qhorus and peer trust as reference-architecture topics | C23–C30, C10–C13, C18 | 🔲 |
+
+Status legend: ✅ done · 🔲 planned · ❌ dropped · ↪️ delivered elsewhere or moved · ⏸ parked (not in the current pipeline).
 
 ### §9.2 Chapter Index
 
@@ -352,67 +354,36 @@ flowchart LR
 
   C1 --> C2["C2: Audit\nL1+L2+L3"]
   C1 --> C3["C3: Tenancy\nL1+L2+L3"]
-  C1 --> C4["C4: Governance\nL1+L2+L3"]
+  C1 --> C4["C4: Governance\n+ C14, C17"]
   C1 --> C5["C5: Hybrid Search\nL1+L2+L3"]
-  C1 --> C6["C6: Resilience\nL1+L2+L3"]
-  C1 --> C7["C7: Concurrency\nL1+L2+L3"]
   C1 --> C8["C8: CRAG\nL1+L2+L3"]
   C1 --> C9["C9: Retrieval Track\nL1+L2+L3"]
 
-  C5 --> C10["C10: Eidos Identity\nL1+L2+L3"]
-  C5 --> C11["C11: Eidos Reputation\nL1+L2+L3"]
-  C5 --> C12["C12: Qhorus Channels\nL1+L2+L3"]
-  C5 --> C13["C13: Qhorus Deliberation\nL1+L2+L3"]
-  C5 --> C14["C14: Work HITL\nL1+L2+L3"]
-  C5 --> C15["C15: Query Expansion\nL1+L2+L3"]
-  C5 --> C16["C16: NLI Hallucination\nL1+L2+L3"]
-  C5 --> C17["C17: Attestation\nL1+L2+L3"]
-  C5 --> C18["C18: Peer Trust\nL1+L2+L3"]
+  C9 --> C31["C31: NLP Templating\nL1+L2+L3"]
+  C9 --> C32["C32: Agent Simulation\nL1+L2+L3"]
+  C9 --> C19["C19: CBR Memory\nL1+L2+L3"]
+  C4 --> C33["C33: MCP Playbooks\nL5"]
 
-  C18 --> C19["C19: CBR Memory\nL1+L2+L3"]
-  C18 --> C20["C20: SPLADE\nL1+L2+L3"]
-  C18 --> C21["C21: Corpus\nL1+L2+L3"]
-  C18 --> C22["C22: Temporal Score\nL1+L2+L3"]
+  C19 --> C23["C23: Engine Lifecycle\nL5"]
+  C19 --> C24["C24: Exec Kernel\nL5"]
+  C19 --> C25["C25: DAG Exec\nL5"]
+  C19 --> C26["C26: ReAct\nL5"]
+  C19 --> C27["C27: Blocks Patterns\nL5"]
+  C19 --> C28["C28: Protocols\nL5"]
+  C19 --> C29["C29: Prompt Opt\nL5"]
+  C19 --> C30["C30: Integration\nL5"]
+  C30 -.-> P4["C10–C13, C18\nPhase 4 topics"]
 
-  C22 --> C23["C23: Engine Lifecycle\nL5"]
-  C22 --> C24["C24: Exec Kernel\nL5"]
-  C22 --> C25["C25: DAG Exec\nL5"]
-  C22 --> C26["C26: ReAct\nL5"]
-  C22 --> C27["C27: Blocks Patterns\nL5"]
-  C22 --> C28["C28: Protocols\nL5"]
-  C22 --> C29["C29: Prompt Opt\nL5"]
-  C22 --> C30["C30: Integration\nL5"]
+  Dropped["Dropped after the roadmap review: C6, C7, C15, C16, C20"]
 
-  style C1 fill:#FFFFFF,stroke:#333
-  style C2 fill:#FFFFFF,stroke:#333
-  style C3 fill:#FFFFFF,stroke:#333
-  style C4 fill:#FFFFFF,stroke:#333
-  style C5 fill:#FFFFFF,stroke:#333
-  style C6 fill:#FFFFFF,stroke:#333
-  style C7 fill:#FFFFFF,stroke:#333
-  style C8 fill:#FFFFFF,stroke:#333
-  style C9 fill:#FFFFFF,stroke:#333
-  style C10 fill:#FFFFFF,stroke:#333
-  style C11 fill:#FFFFFF,stroke:#333
-  style C12 fill:#FFFFFF,stroke:#333
-  style C13 fill:#FFFFFF,stroke:#333
-  style C14 fill:#FFFFFF,stroke:#333
-  style C15 fill:#FFFFFF,stroke:#333
-  style C16 fill:#FFFFFF,stroke:#333
-  style C17 fill:#FFFFFF,stroke:#333
-  style C18 fill:#FFFFFF,stroke:#333
-  style C19 fill:#FFFFFF,stroke:#333
-  style C20 fill:#FFFFFF,stroke:#333
-  style C21 fill:#FFFFFF,stroke:#333
-  style C22 fill:#FFFFFF,stroke:#333
-  style C23 fill:#FFFFFF,stroke:#333
-  style C24 fill:#FFFFFF,stroke:#333
-  style C25 fill:#FFFFFF,stroke:#333
-  style C26 fill:#FFFFFF,stroke:#333
-  style C27 fill:#FFFFFF,stroke:#333
-  style C28 fill:#FFFFFF,stroke:#333
-  style C29 fill:#FFFFFF,stroke:#333
-  style C30 fill:#FFFFFF,stroke:#333
+  style C1 fill:#DFF0D8,stroke:#333
+  style C2 fill:#DFF0D8,stroke:#333
+  style C3 fill:#DFF0D8,stroke:#333
+  style C4 fill:#DFF0D8,stroke:#333
+  style C5 fill:#DFF0D8,stroke:#333
+  style C8 fill:#DFF0D8,stroke:#333
+  style C9 fill:#DFF0D8,stroke:#333
+  style Dropped fill:#EEEEEE,stroke:#999,stroke-dasharray: 4
 ```
 
 ### §9.3 Chapter Summary Table
@@ -424,23 +395,23 @@ flowchart LR
 | 3 | Tenancy — Tenant Isolation Decorators | J2 | 1 | L1, L2, L3 | ✅ |
 | 4 | Governance — Oversight + Trust + Lineage | J2 | 1 | L1, L2, L3 | ✅ (gate on tool calls; Spring approvals via remote casehub-work #15) |
 | 5 | Hybrid Search — SPLADE + Dense + RRF | J2 | 1 | L1, L2, L3 | ✅ |
-| 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | 🔲 |
-| 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | 🔲 |
+| 6 | Resilience — DLQ + Retry + Watchdog | J2 | 1 | L1, L2, L3 | ❌ dropped (#32) |
+| 7 | Concurrency Budget — LLM Cost Control | J2 | 1 | L1, L2, L3 | ❌ dropped (#32) |
 | 8 | CRAG Quality Gating — Hallucination Reduction | J2 | 1 | L1, L2, L3 | ✅ |
 | 9 | Retrieval Tracking + Analytics | J2 | 1 | L1, L2, L3 | ✅ |
-| 10 | Eidos Agent Identity + Personality | J3 | 2 | L1, L2, L3 | 🔲 |
-| 11 | Eidos Reputation + Capability Matching | J3 | 2 | L1, L2, L3 | 🔲 |
-| 12 | Qhorus Typed Channels | J3 | 2 | L1, L2, L3 | 🔲 |
-| 13 | Qhorus Deliberation + Commitments | J3 | 2 | L1, L2, L3 | 🔲 |
-| 14 | Work Human-in-the-Loop | J3 | 2 | L1, L2, L3 | 🔲 |
-| 15 | Neocortex Query Expansion (HyDE, Step-Back) | J3 | 2 | L1, L2, L3 | 🔲 |
-| 16 | Neocortex NLI Hallucination Detection | J3 | 2 | L1, L2, L3 | 🔲 |
-| 17 | Blocks Attestation + Oversight | J3 | 2 | L1, L2, L3 | 🔲 |
-| 18 | Ledger Peer Trust + EigenTrust | J3 | 2 | L1, L2, L3 | 🔲 |
-| 19 | CBR Memory | J4 | 3 | L1, L2, L3 | 🔲 |
-| 20 | SPLADE Embedding | J4 | 3 | L1, L2, L3 | 🔲 |
-| 21 | Corpus Ingestion | J4 | 3 | L1, L2, L3 | 🔲 |
-| 22 | Temporal/Version Scoring | J4 | 3 | L1, L2, L3 | 🔲 |
+| 10 | Eidos Agent Identity + Personality | J5 | 4 | L5 | ↪️ Phase 4 topic (#32) |
+| 11 | Eidos Reputation + Capability Matching | J5 | 4 | L5 | ↪️ Phase 4 topic (#32) |
+| 12 | Qhorus Typed Channels | J5 | 4 | L5 | ↪️ Phase 4 topic (#32) |
+| 13 | Qhorus Deliberation + Commitments | J5 | 4 | L5 | ↪️ Phase 4 topic (#32) |
+| 14 | Work Human-in-the-Loop | J2 | 1 | L1, L2, L3 | ↪️ shipped in C4 (#32) |
+| 15 | Neocortex Query Expansion (HyDE, Step-Back) | J3 | 2 | L5 | ❌ dropped → recipe (#32) |
+| 16 | Neocortex NLI Hallucination Detection | J3 | 2 | L1, L2, L3 | ❌ dropped (#36) |
+| 17 | Blocks Attestation + Oversight | J2 | 1 | L1, L2, L3 | ↪️ shipped in C4 (#32) |
+| 18 | Ledger Peer Trust + EigenTrust | J5 | 4 | L5 | ↪️ Phase 4 topic (#32) |
+| 19 | CBR Memory | J4 | 3 | L1, L2, L3 | 🔲 #39 |
+| 20 | SPLADE Embedding | J4 | 3 | L1, L2, L3 | ❌ dropped (#38) |
+| 21 | Corpus Ingestion | J4 | 3 | L1, L2, L3 | ⏸ parked |
+| 22 | Temporal/Version Scoring | J4 | 3 | L1, L2, L3 | ⏸ parked |
 | 23 | Engine Case Lifecycle | J5 | 4 | L5 | 🔲 |
 | 24 | Engine Execution Kernel | J5 | 4 | L5 | 🔲 |
 | 25 | Engine DAG Execution | J5 | 4 | L5 | 🔲 |
@@ -449,6 +420,9 @@ flowchart LR
 | 28 | Blocks Multi-Agent Protocols | J5 | 4 | L5 | 🔲 |
 | 29 | Blocks Prompt Optimisation | J5 | 4 | L5 | 🔲 |
 | 30 | Full Platform Integration Guide | J5 | 4 | L5 | 🔲 |
+| 31 | NLP Template Rendering + Extraction | J4 | 3 | L1, L2, L3 | 🔲 #37 |
+| 32 | Agent Simulation | J4 | 3 | L1, L2, L3 | 🔲 #41 |
+| 33 | MCP Playbook Integration Guide | J4 | 3 | L5 | 🔲 #40 |
 
 ### §9.4 Chapter Entries
 
@@ -456,7 +430,7 @@ flowchart LR
 
 #### C1 — Scaffold
 
-**Journey:** J1 | **Sequence:** 1 of 30 | **Status:** ✅
+**Journey:** J1 | **Sequence:** 1 of 33 | **Status:** ✅
 
 **What this delivers**
 The repo exists with Maven multi-module structure, CI pipeline, BOM and workspace. IntelliJ can open the project. `mvn install` passes. The ChatModel ↔ AgentProvider bridge originally planned here was retired in platform#638 and its empty `agents*` modules were removed.
@@ -481,7 +455,7 @@ The repo exists with Maven multi-module structure, CI pipeline, BOM and workspac
 
 #### C2 — Audit: Ledger + Compliance (Phase 1)
 
-**Journey:** J2 | **Sequence:** 2 of 30 | **Status:** ✅
+**Journey:** J2 | **Sequence:** 2 of 33 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §audit
 
 **What this delivers**
@@ -505,7 +479,7 @@ Every LLM call and every agent invocation produces a ledger entry (`AuditRecord`
 
 #### C3 — Tenancy: Tenant Isolation Decorators (Phase 1)
 
-**Journey:** J2 | **Sequence:** 3 of 30 | **Status:** ✅
+**Journey:** J2 | **Sequence:** 3 of 33 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §tenancy
 
 **What this delivers**
@@ -529,7 +503,7 @@ Any `ChatMemoryStore`, `EmbeddingStore`, or `ContentRetriever` becomes multi-ten
 
 #### C4 — Governance: Oversight + Trust + Lineage (Phase 1)
 
-**Journey:** J2 | **Sequence:** 4 of 30 | **Status:** ✅
+**Journey:** J2 | **Sequence:** 4 of 33 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §governance
 
 **What this delivers**
@@ -554,7 +528,7 @@ Delivered via `AgentListener`: causal lineage (shared with audit — `Governance
 
 #### C5 — Hybrid Search: SPLADE + Dense + RRF (Phase 1)
 
-**Journey:** J2 | **Sequence:** 5 of 30 | **Status:** ✅
+**Journey:** J2 | **Sequence:** 5 of 33 | **Status:** ✅
 **Spec:** `2026-09-24-phase-1-enterprise-concerns.md` §hybrid-search
 **Justification:** LC4j issue #4087 — acknowledged gap, no LC4j solution
 
@@ -577,35 +551,27 @@ Delivered via `AgentListener`: causal lineage (shared with audit — `Governance
 
 #### C6 — Resilience: DLQ + Retry + Watchdog (Phase 1)
 
-**Journey:** J2 | **Sequence:** 6 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 6 of 33 | **Status:** ❌ Dropped (#32)
 
-**What this delivers**
-Failed agent tool calls recover instead of crashing. Dead letter queue captures failed invocations for replay. Retry policies with configurable backoff. Watchdog detects hung agents and cancels or recovers them. All classpath-activated from engine's resilience infrastructure.
+**Decision (#32):** dropped. STRATEGY says wait for upstream (Quarkus WG 50582), and engine's resilience classes operate on `CaseInstance`/`CaseInstanceCache`, not on LC4j calls. A narrow need that emerges later (e.g. dead-lettering failed tool calls through the governance gate) is a small addition to the governance module, not a chapter.
 
-**Key classes:** `DeadLetterQueue`, `RetryPolicy`, `PoisonPillDetector`, `WatchdogRecoveryBridge` — bridged from casehub-engine.
-
-**Issues**
-- TBD — resilience bridge module (core + quarkus + spring)
+*Original scope:* dead letter queue, retry policies and a watchdog for agent tool calls, bridged from engine's `DeadLetterQueue`, `RetryPolicy`, `PoisonPillDetector`, `WatchdogRecoveryBridge`.
 
 ---
 
 #### C7 — Concurrency Budget: LLM Cost Control (Phase 1)
 
-**Journey:** J2 | **Sequence:** 7 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 7 of 33 | **Status:** ❌ Dropped (#32)
 
-**What this delivers**
-Limit how many agents run concurrently — backpressure for LLM API cost control. LC4j's parallel patterns have no concurrency limiting. Classpath-activated from engine's `DispatchBudget` SPI.
+**Decision (#32):** dropped — fails D8 on all three criteria, and no deployer has asked. A `Semaphore`-wrapping `ChatModel` decorator is a few lines in the application.
 
-**Key classes:** `DispatchBudget`, `ConcurrencyGate` — bridged from casehub-engine.
-
-**Issues**
-- TBD — concurrency budget bridge module
+*Original scope:* limit concurrent agents for LLM cost control via engine's `DispatchBudget`.
 
 ---
 
 #### C8 — CRAG Quality Gating: Hallucination Reduction (Phase 1)
 
-**Journey:** J2 | **Sequence:** 8 of 30 | **Status:** ✅
+**Journey:** J2 | **Sequence:** 8 of 33 | **Status:** ✅
 
 **What this delivers**
 Corrective RAG — automatically discards low-relevance chunks before the LLM sees them. Uses neocortex's cross-encoder to score chunk relevance and remove noise. Reduces hallucination by preventing the LLM from reasoning over irrelevant context.
@@ -619,7 +585,7 @@ Corrective RAG — automatically discards low-relevance chunks before the LLM se
 
 #### C9 — Retrieval Tracking + Analytics (Phase 1)
 
-**Journey:** J2 | **Sequence:** 9 of 30 | **Status:** ✅
+**Journey:** J2 | **Sequence:** 9 of 33 | **Status:** ✅
 
 **What this delivers**
 Every RAG retrieval is recorded with provenance — what was retrieved, for which query, from which corpus. Query clustering, document impact centrality, zero-hit detection. Observability for RAG that LC4j does not provide. Classpath-activated from neocortex's tracking infrastructure.
@@ -634,9 +600,10 @@ Every RAG retrieval is recorded with provenance — what was retrieved, for whic
 
 ---
 
-#### C10 — Eidos Agent Identity + Personality (Phase 2)
+#### C10 — Eidos Agent Identity + Personality (Phase 4, moved from Phase 2)
 
-**Journey:** J3 | **Sequence:** 10 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 10 of 33 | **Status:** ↪️ Moved to Phase 4 (#32)
+**Decision (#32):** moved to Phase 4 as a reference-architecture topic (with C23–C30), not a standalone module — it needs eidos/qhorus/ledger as hard dependencies, which is CaseHub platform integration rather than LC4j enrichment. Scope below is the original plan.
 **Justification:** Different category — LC4j agents are identity-less (prompt string). Eidos provides structured identity.
 
 **What this delivers**
@@ -651,9 +618,10 @@ LC4j agents go from hardcoded system prompt strings to dynamically rendered iden
 
 ---
 
-#### C11 — Eidos Reputation + Capability Matching (Phase 2)
+#### C11 — Eidos Reputation + Capability Matching (Phase 4, moved from Phase 2)
 
-**Journey:** J3 | **Sequence:** 11 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 11 of 33 | **Status:** ↪️ Moved to Phase 4 (#32)
+**Decision (#32):** moved to Phase 4 as a reference-architecture topic (with C23–C30), not a standalone module — it needs eidos/qhorus/ledger as hard dependencies, which is CaseHub platform integration rather than LC4j enrichment. Scope below is the original plan.
 
 **What this delivers**
 LC4j agents are selected by what they can do, not by name. Capability health probing — agent self-reports whether its declared capabilities are operable. Subsumption matching (OWLS-MX match degrees: Exact > Plugin > Specialization) for agent selection. Epistemic confidence via ScalarRegressor — the agent knows how confident it should be.
@@ -665,9 +633,10 @@ LC4j agents are selected by what they can do, not by name. Capability health pro
 
 ---
 
-#### C12 — Qhorus Typed Channels (Phase 2)
+#### C12 — Qhorus Typed Channels (Phase 4, moved from Phase 2)
 
-**Journey:** J3 | **Sequence:** 12 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 12 of 33 | **Status:** ↪️ Moved to Phase 4 (#32)
+**Decision (#32):** moved to Phase 4 as a reference-architecture topic (with C23–C30), not a standalone module — it needs eidos/qhorus/ledger as hard dependencies, which is CaseHub platform integration rather than LC4j enrichment. Scope below is the original plan.
 **Justification:** Different category — LC4j has no inter-agent communication framework. Agents call each other via method invocations.
 
 **What this delivers**
@@ -681,9 +650,10 @@ Structured inter-agent messaging with 5 channel semantics (APPEND, COLLECT, BARR
 
 ---
 
-#### C13 — Qhorus Deliberation + Commitments (Phase 2)
+#### C13 — Qhorus Deliberation + Commitments (Phase 4, moved from Phase 2)
 
-**Journey:** J3 | **Sequence:** 13 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 13 of 33 | **Status:** ↪️ Moved to Phase 4 (#32)
+**Decision (#32):** moved to Phase 4 as a reference-architecture topic (with C23–C30), not a standalone module — it needs eidos/qhorus/ledger as hard dependencies, which is CaseHub platform integration rather than LC4j enrichment. Scope below is the original plan.
 
 **What this delivers**
 Agent messages carry deontic obligations — a PROMISE creates an enforceable commitment, a REQUEST creates an expectation. Violations are detected and recorded. Structured debate with auditable outcomes. No framework anywhere offers this for LLM agents.
@@ -695,69 +665,47 @@ Agent messages carry deontic obligations — a PROMISE creates an enforceable co
 
 ---
 
-#### C14 — Work Human-in-the-Loop (Phase 2)
+#### C14 — Work Human-in-the-Loop (shipped in Phase 1)
 
-**Journey:** J3 | **Sequence:** 14 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 14 of 33 | **Status:** ↪️ Shipped in C4 (#32)
 **Justification:** Different category — LC4j has no human participation model.
 
-**What this delivers**
-LC4j agent creates a `WorkItem` for human review/approval. 11-status lifecycle, SLA enforcement (breach → extend → escalate → fail), M-of-N group completion, delegation. The agent pauses; a human decides; the agent resumes.
-
-**Key capabilities:** `WorkItemCreateRequest`, SLA breach policies, `WorkQueue`, `EscalationService`, delegation.
-
-**Issues**
-- TBD — work HITL bridge module (core + quarkus + spring)
-- TBD — WorkItem creation from AgentListener callback
-- TBD — example: agent creates review task, waits for approval
+**Decision (#32):** delivered by C4 governance. The oversight gate (`OversightToolGate` + engine's risk classifiers + `WorkItemApprovalPort`, in-process and over casehub-work REST — #10, #15) is the tool-call approval flow this chapter was for. The rest of the original scope (arbitrary work items, SLA lifecycle, M-of-N, delegation) is application-level orchestration, not LC4j enrichment.
 
 ---
 
 #### C15 — Neocortex Query Expansion: HyDE, Step-Back (Phase 2)
 
-**Journey:** J3 | **Sequence:** 15 of 30 | **Status:** 🔲
+**Journey:** J3 | **Sequence:** 15 of 33 | **Status:** ❌ Dropped → recipe (#32)
 
-**What this delivers**
-Reformulates queries for better retrieval: HyDE (hypothetical document embeddings), step-back (abstract reformulation), multi-query with RRF fusion. Drift detection included. LC4j has basic `QueryTransformer` but not HyDE, step-back, or drift detection.
+**Decision (#32):** dropped as a module. LangChain4j's `QueryTransformer` covers the rewriting (`ExpandingQueryTransformer`; HyDE and step-back are a few lines), so a bridge module would duplicate it. The real gaps were integration problems, fixed in C9: one record per question at the augmentor (#28) and passage de-duplication despite retrieval IDs (#24).
 
-**Key capabilities:** `LlmQueryExpander`, `StepBackQueryExpander`, `QueryExpandingCaseRetriever`, drift detection metrics.
-
-**Issues**
-- TBD — query expansion bridge module
+**Delivered instead:** the recipe `docs/guides/query-rewriting.md` — multi-query, HyDE and step-back with `RetrievalIdAwareContentAggregator` and augmentor tracking — backed by `examples/.../QueryRewritingExample.java` and its offline test.
 
 ---
 
 #### C16 — Neocortex NLI Hallucination Detection (Phase 2)
 
-**Journey:** J3 | **Sequence:** 16 of 30 | **Status:** 🔲
+**Journey:** J3 | **Sequence:** 16 of 33 | **Status:** ❌ Dropped (#36)
 
-**What this delivers**
-Entailment/contradiction/neutral classification on LLM outputs — local ONNX, no API call. Verify whether LLM output is supported by the retrieved context. LC4j has no built-in hallucination detection.
+**Decision:** first kept as the next module in #32, then dropped when #36 was closed — NLI entailment proved unreliable on real LLM output, and the inference infrastructure it needed does not exist in neocortex.
 
-**Key capabilities:** `NliClassifier` (inference-tasks), local ONNX DeBERTa model, softmax-normalised confidence scores.
-
-**Issues**
-- TBD — NLI hallucination detection bridge module
+*Original scope:* an `OutputGuardrail` that checks each claim of the answer against the retrieved context with a local ONNX DeBERTa NLI model.
 
 ---
 
-#### C17 — Blocks Attestation + Oversight (Phase 2)
+#### C17 — Blocks Attestation + Oversight (shipped in Phase 1)
 
-**Journey:** J3 | **Sequence:** 17 of 30 | **Status:** 🔲
+**Journey:** J2 | **Sequence:** 17 of 33 | **Status:** ↪️ Shipped in C4 (#32)
 
-**What this delivers**
-Every agent decision writes a structured attestation record (verdict, confidence, evidence, causedByEntryId chain). Oversight gates with pluggable risk classification — gate sensitive agent actions behind human approval.
-
-**Key capabilities:** `AttestationIntent`, `AttestationWriter`, `OversightGate`, `RiskClassifier`, `IntakeClassifier`.
-
-**Issues**
-- TBD — agency attestation bridge module
-- TBD — agency oversight bridge module
+**Decision (#32):** delivered by C4 governance. Oversight is the governance gate on tool calls; trust recording (`GovernanceAgentListener` → `LedgerTrustPort` → `SOUND`/`FLAGGED` outcomes) landed there too. Structured attestation records (`AttestationIntent`/`AttestationWriter` with verdict, evidence and causal chains) are a ledger/agency concern; if needed they join C18's trust work in Phase 4.
 
 ---
 
-#### C18 — Ledger Peer Trust + EigenTrust (Phase 2)
+#### C18 — Ledger Peer Trust + EigenTrust (Phase 4, moved from Phase 2)
 
-**Journey:** J3 | **Sequence:** 18 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 18 of 33 | **Status:** ↪️ Moved to Phase 4 (#32)
+**Decision (#32):** moved to Phase 4 as a reference-architecture topic (with C23–C30), not a standalone module — it needs eidos/qhorus/ledger as hard dependencies, which is CaseHub platform integration rather than LC4j enrichment. Scope below is the original plan.
 
 **What this delivers**
 Other agents (or humans) rate an LC4j agent's outputs as SOUND/FLAGGED/ENDORSED/CHALLENGED. Bayesian Beta trust scores evolve from these attestations. EigenTrust peer verdict aggregation computes global reputation. Agent reputation is earned, not declared.
@@ -772,54 +720,56 @@ Other agents (or humans) rate an LC4j agent's outputs as SOUND/FLAGGED/ENDORSED/
 
 #### C19 — CBR Memory (Phase 3)
 
-**Journey:** J4 | **Sequence:** 19 of 30 | **Status:** 🔲
+**Journey:** J4 | **Sequence:** 19 of 33 | **Status:** 🔲 (#39)
+**Justification:** Different category — case-based reasoning, not chat persistence.
+
 **Justification:** Different category — case-based reasoning, not chat persistence.
 
 **What this delivers**
-Learn from past cases — similarity-weighted retrieval, outcome feedback loop, plan adaptation, retention policies, trust-weighted retention. Not a competing ChatMemoryStore; a fundamentally different memory paradigm.
+Learn from past cases — similarity-weighted retrieval, outcome feedback loop, plan adaptation, retention policies, trust-weighted retention — bridged from neocortex's `memory-cbr-*` modules, which run standalone. Not a competing `ChatMemoryStore`; a fundamentally different memory paradigm. Where it plugs into LangChain4j (retriever, tool or memory SPI) is the first design question — no LC4j SPI fits CBR directly.
 
-*Detail expands as Phase 3 approaches.*
+**Issues**
+- #39 — CBR memory (core + quarkus + spring)
 
 ---
 
 #### C20 — SPLADE Embedding (Phase 3)
 
-**Journey:** J4 | **Sequence:** 20 of 30 | **Status:** 🔲
+**Journey:** J4 | **Sequence:** 20 of 33 | **Status:** ❌ Dropped (#38)
 **Justification:** No JVM implementation outside neocortex.
 
-**What this delivers**
-SPLADE sparse embeddings for LC4j applications — learned term expansion via masked language modelling. Unique JVM capability.
-
-*Detail expands as Phase 3 approaches.*
+**Decision:** dropped when #38 was closed — SPLADE is an implementation detail inside hybrid search (C5, #12), not a standalone user-facing capability.
 
 ---
 
 #### C21 — Corpus Ingestion (Phase 3)
 
-**Journey:** J4 | **Sequence:** 21 of 30 | **Status:** 🔲
+**Journey:** J4 | **Sequence:** 21 of 33 | **Status:** ⏸ Parked
+**Justification:** Different category — enterprise document lifecycle (versioning, provenance, change tracking).
+
 **Justification:** Different category — enterprise document lifecycle (versioning, provenance, change tracking).
 
 **What this delivers**
 Managed document lifecycle beyond LC4j's basic Tika parsing. Versioned corpus stores, change detection, cursor-based incremental re-indexing, metadata extraction.
 
-*Detail expands as Phase 3 approaches.*
+Not in the community pipeline (#35); corpus management is reachable today through the distributions MCP server.
 
 ---
 
 #### C22 — Temporal/Version Scoring (Phase 3)
 
-**Journey:** J4 | **Sequence:** 22 of 30 | **Status:** 🔲
+**Journey:** J4 | **Sequence:** 22 of 33 | **Status:** ⏸ Parked
 
 **What this delivers**
 Post-retrieval score decay by document age or version distance — fresher or newer documents rank higher. Thin composable utility.
 
-*Detail expands as Phase 3 approaches.*
+Not in the community pipeline (#35).
 
 ---
 
 #### C23 — Engine Case Lifecycle (Phase 4)
 
-**Journey:** J5 | **Sequence:** 23 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 23 of 33 | **Status:** 🔲
 
 **What this delivers**
 Guide + example: LC4j agents as workers in governed case instances. CaseContext, EventLog, Goal model, CasePlanModel, PlanItem. The engine manages when and how agents are invoked.
@@ -830,7 +780,7 @@ Guide + example: LC4j agents as workers in governed case instances. CaseContext,
 
 #### C24 — Engine Execution Kernel (Phase 4)
 
-**Journey:** J5 | **Sequence:** 24 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 24 of 33 | **Status:** 🔲
 
 **What this delivers**
 Composable routing strategies (5-signal blending: trust + workload + personality + semantic + CBR), stage gating, loop control, SubCase coordination. Beyond LC4j's "supervisor picks the next agent."
@@ -841,7 +791,7 @@ Composable routing strategies (5-signal blending: trust + workload + personality
 
 #### C25 — Engine DAG Execution (Phase 4)
 
-**Journey:** J5 | **Sequence:** 25 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 25 of 33 | **Status:** 🔲
 
 **What this delivers**
 Dependency-graph-aware parallel agent dispatch with ANY_OF/ALL_OF join types, contingency nodes. Beyond LC4j's flat `@ParallelAgent`.
@@ -852,7 +802,7 @@ Dependency-graph-aware parallel agent dispatch with ANY_OF/ALL_OF join types, co
 
 #### C26 — Engine ReAct Loop (Phase 4)
 
-**Journey:** J5 | **Sequence:** 26 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 26 of 33 | **Status:** 🔲
 
 **What this delivers**
 Production-grade reason-act-observe loop with retry, timeout, and tool call tracking. LC4j's ReAct requires manual prompt engineering.
@@ -863,7 +813,7 @@ Production-grade reason-act-observe loop with retry, timeout, and tool call trac
 
 #### C27 — Blocks Orchestration Patterns (Phase 4)
 
-**Journey:** J5 | **Sequence:** 27 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 27 of 33 | **Status:** 🔲
 
 **What this delivers**
 @Supervisor, @Sequence, @Parallel, @Debate, @Voting annotations with governance meta-annotations (@OversightGate, @TrustRouted, @Attestation). Side by side with LC4j's patterns — CaseHub handles external orchestration, LC4j handles internal agent logic.
@@ -874,7 +824,7 @@ Production-grade reason-act-observe loop with retry, timeout, and tool call trac
 
 #### C28 — Blocks Multi-Agent Protocols (Phase 4)
 
-**Journey:** J5 | **Sequence:** 28 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 28 of 33 | **Status:** 🔲
 
 **What this delivers**
 Conversation orchestration with turn policies and convergence detection. Negotiation protocols with acceptance policies. Judgment orchestration with fan-out, escalation, and consensus. Coalition formation via capability-based team assembly.
@@ -885,7 +835,7 @@ Conversation orchestration with turn policies and convergence detection. Negotia
 
 #### C29 — Blocks Prompt Optimisation (Phase 4)
 
-**Journey:** J5 | **Sequence:** 29 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 29 of 33 | **Status:** 🔲
 
 **What this delivers**
 DSPy-inspired few-shot optimiser (diversity-aware), instruction optimiser (LLM meta-prompting), A/B variant selection. Data-driven prompt improvement.
@@ -896,12 +846,56 @@ DSPy-inspired few-shot optimiser (diversity-aware), instruction optimiser (LLM m
 
 #### C30 — Full Platform Integration Guide (Phase 4)
 
-**Journey:** J5 | **Sequence:** 30 of 30 | **Status:** 🔲
+**Journey:** J5 | **Sequence:** 30 of 33 | **Status:** 🔲
 
 **What this delivers**
 How all pieces compose. The AML tutorial exercises all 5 LC4j agentic patterns with CaseHub enterprise capabilities. A developer who completes this guide has seen the full value proposition and understands how to build enterprise applications with LC4j + CaseHub.
 
 *Detail expands as Phase 4 approaches.*
+
+---
+
+#### C31 — NLP Template Rendering + Extraction (Phase 3)
+
+**Journey:** J4 | **Sequence:** 31 of 33 | **Status:** 🔲 (#37)
+**Justification:** Different category — structured data from prose without JSON mode or constrained decoding.
+
+**What this delivers**
+Agents write natural language; templates render structured data into prose for the prompt and extract structured fields back from the answer. Bridges platform's template registry: rendering through LangChain4j's `PromptTemplateFactory` SPI (classpath, replaces Mustache), extraction through an `OutputGuardrail` (regex → lemma-based NLP → adaptive LLM fallback; `reprompt()` with the sentence schema when extraction fails), sentence schemas published to the prompt through a `ContentInjector`.
+
+**Depends on:** platform template registry — platform#943, #959, #971, #981 (open).
+
+**Issues**
+- #37 — template rendering + extraction (core + quarkus + spring)
+
+---
+
+#### C32 — Agent Simulation (Phase 3)
+
+**Journey:** J4 | **Sequence:** 32 of 33 | **Status:** 🔲 (#41)
+**Justification:** Different category — testing infrastructure; LC4j has no simulation framework.
+
+**What this delivers**
+`SimulatedChatModel` — a LangChain4j `ChatModel` backed by platform's simulation runtime: prompt→response corpora in YAML, capture of real traffic and deterministic replay in CI, key-lookup / sequential / nearest-match / recorded-replay / random strategies, overlay stack per test, normalised keys (UUIDs and timestamps stripped).
+
+**Depends on:** platform `simulation-api`, `simulation-core`, `agent-simulation-core`; YAML corpora (platform#968, closed).
+
+**Issues**
+- #41 — agent simulation (core + quarkus + spring)
+
+---
+
+#### C33 — MCP Playbook Integration Guide (Phase 3)
+
+**Journey:** J4 | **Sequence:** 33 of 33 | **Status:** 🔲 (#40)
+
+**What this delivers**
+Documentation (no new module): audit, the governance gate, tenancy and retrieval tracking applied to multi-step playbooks the distributions MCP server exposes. A playbook is one MCP tool call from LangChain4j's side, so the existing classpath-activated modules already apply; the guide shows the audit trail, a mid-playbook approval and tenant isolation.
+
+**Depends on:** playbooks exposed through distributions — connectors#361, platform#827 (open).
+
+**Issues**
+- #40 — MCP playbook integration guide
 
 ---
 
@@ -919,6 +913,8 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | D6 | Four lead modules (audit, tenancy, governance, hybrid-search) | All in the "safe" column per community research. |
 | D7 | ~~Move platform/agent-langchain4j here~~ — superseded | The bridge was retired in platform#638; consumers use `AgentProvider` directly. |
 | D8 | Future modules require documented justification | Gap acknowledged, different category, or customer requested. |
+
+Roadmap decisions after Phase 1 are recorded in #32 (C6, C7, C15 dropped; C14, C17 shipped in C4; C10–C13, C18 to Phase 4) and epic #35 (community pipeline; C16 and C20 dropped via #36 and #38).
 
 ---
 
@@ -943,7 +939,7 @@ Decisions are captured in the workspace at `specs/casehub-langchain4j/decisions.
 | CDI bean priority conflicts | Multiple casehub-langchain4j modules + quarkus-langchain4j modules | Documented priority tier system. Integration tests with realistic deployments. |
 | AgentListener API instability | `langchain4j-agentic` is newer than `langchain4j-core` | Monitor LC4j releases. Interface adapter for loose coupling. |
 | Scope creep | Pressure to add modules competing with LC4j | Expansion policy (D8) requires documented justification. STRATEGY.md is the public commitment. |
-| Phase 2 dependency breadth | Phase 2 modules depend on eidos, qhorus, work, agency, ledger | Each Phase 2 module is optional and independent. Adding one doesn't force all. |
+| Upstream readiness | Phase 3 modules bridge platform work still in progress (template registry, playbooks) | Sequence by readiness; a module starts only when its upstream API is stable. Each module is optional and independent. |
 
 ---
 
