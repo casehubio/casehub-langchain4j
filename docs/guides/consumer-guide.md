@@ -372,7 +372,7 @@ List<QueryQualitySignal> zeroHits = RetrievalAnalyzer.zeroHitQueries(tracker, co
 
 **Augmentors that rewrite the question.** A `RetrievalAugmentor` with a `QueryTransformer`
 (`ExpandingQueryTransformer`, `CompressingQueryTransformer`, a HyDE or step-back transformer of your
-own) calls the retrievers once per rewritten query. Tracking therefore also wraps your
+own — see the [query rewriting recipe](query-rewriting.md)) calls the retrievers once per rewritten query. Tracking therefore also wraps your
 `RetrievalAugmentor` bean: each question is recorded **once**, under the user's message text, with
 the contents after aggregation — the retrievers inside stand down. When the augmentor's retrievers are
 tracked beans, an augmentation that calls none of them (a router that skips retrieval for small
@@ -491,6 +491,8 @@ Runnable, offline examples live in the `examples` module, each with a test:
 - `AuditExample` — one chat call produces one `AI_CHAT_COMPLETION` entry.
 - `TenancyExample` — an ordinary `ChatMemoryStore` producer becomes multi-tenant; two tenants use
   the same conversation ID and never see each other.
+- `QueryRewritingExample` — multi-query and HyDE augmentors that record each question once and
+  merge passages several queries found ([recipe](query-rewriting.md)).
 
 ```bash
 mvn test -pl examples -am
