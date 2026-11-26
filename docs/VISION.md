@@ -9,8 +9,8 @@ agentic orchestration patterns. It does this well.
 What it doesn't handle — by design — is what happens when those
 applications need to operate in enterprise environments: cryptographic
 audit trails, multi-tenant data isolation, human oversight of agent
-decisions, agent identity and reputation, structured inter-agent
-communication, and compliance evidence.
+actions, evidence of which documents a RAG answer used, and compliance
+evidence.
 
 `casehub-langchain4j` adds these capabilities to LangChain4j
 applications. It wraps existing LangChain4j components with enterprise
@@ -65,11 +65,13 @@ financial services, healthcare, and government, certain actions require
 human approval before execution. An agent that autonomously approves
 transactions, disables accounts, or prescribes medication is a liability.
 
-*Planned, not yet available.* An approval gate cannot be built as an
-`AgentListener`: LangChain4j catches exceptions thrown by listeners and
-runs the agent anyway. Today **casehub-langchain4j-governance** records the
-causal lineage of every agent invocation and its outcome; the gate needs a
-different mechanism and is open.
+**casehub-langchain4j-governance** puts a gate in front of the agent's
+tool calls. An `AgentListener` cannot block — LangChain4j catches listener
+exceptions and runs the agent anyway — so the gate wraps the tool
+executors instead. Each call is classified by the application's risk
+classifiers; a call that needs approval runs only after a human completes
+a casehub-work task for that exact call, once. Approvals work in-process
+or against a remote casehub-work over REST.
 
 ### "We have 12 agents that can handle this task. Which one should we pick?"
 
@@ -84,59 +86,34 @@ failed) as a ledger attestation, so Bayesian trust scores evolve from real
 history. *Using* those scores to pick the next agent is planned, not yet
 available.
 
-### "Our agent is a ChatModel and a prompt string. It has no identity."
+### "Which documents did the AI actually use for that answer?"
 
-LC4j agents are defined by their system prompt. They have no persistent
-identity, no track record, no capabilities that can be queried, and no
-reputation. Two agents that happen to have the same prompt are
-indistinguishable.
+A RAG pipeline retrieves passages, the model answers, and the passages
+are gone. Nobody can say which documents a given answer relied on, which
+questions found nothing, or which documents are never retrieved at all.
+When the pipeline rewrites the question into several queries, even
+counting retrievals goes wrong.
 
-**casehub-langchain4j-eidos** gives agents structured identity:
-dynamic system prompt rendering from semantic context (role, capability,
-goals, constraints), capability declarations with health probing
-(agents report whether their skills are currently operable), and
-subsumption-based capability matching (select agents by what they can
-actually do, not by name). An agent's reputation evolves from outcomes
-across sessions. Personality composition — weighted disposition axes
-and archetype profiles — is available for applications that need
-differentiated agent behaviour (proven in Wacky Manor with ~8
-distinguishable personalities in practice). This is not prompt
-engineering — it is agent architecture.
+**casehub-langchain4j-tracking** records every question with the
+documents the model received, in neocortex's retrieval tracker — once per
+question, also when the augmentor expands or rewrites it. Each passage
+carries a retrieval ID for feedback, and neocortex's analytics find
+zero-hit questions and document impact. **casehub-langchain4j-crag**
+goes one step earlier: a cross-encoder grades every retrieved passage
+and drops the irrelevant ones before the model reasons over them.
 
-### "Our agents communicate via method calls. We can't audit what they said."
+### "Our agents have no identity, and they talk through method calls."
 
-LC4j's multi-agent patterns (supervisor, sequence, parallel) coordinate
-via direct method invocations and shared `AgenticScope` state. There is
-no record of what agent A said to agent B, no access control on who can
-read shared state, and no structured protocol for multi-agent
-deliberation.
+LC4j agents are defined by their system prompt and coordinate through
+direct method invocations and shared `AgenticScope` state. There is no
+persistent identity or reputation, and no record of what agent A said to
+agent B.
 
-**casehub-langchain4j-qhorus** gives agents typed communication channels
-with five delivery semantics, access controls, rate limiting, and
-delivery tracking. Messages are `MessageLedgerEntry` records — auditable,
-tamper-evident. The normative commitment layer (speech-act theory) means
-a promise creates an enforceable obligation and violations are detected.
-This is structured inter-agent communication, not shared mutable state.
-
-### "An agent tool call failed and the whole pipeline crashed."
-
-LC4j has no resilience layer. A failed tool call or a model timeout is
-a hard stop. A hung agent blocks forever. There is no retry, no dead
-letter queue, no circuit breaker, no cost budget.
-
-Generic resilience libraries (Resilience4j, MicroProfile Fault
-Tolerance, Quarkus `@Retry`/`@Timeout`) handle method-level retry and
-timeout. They do not handle agent-specific concerns: detecting that an
-agent is stuck in a reasoning loop (not just slow), identifying poison
-inputs that will fail on every retry, or maintaining a dead letter queue
-of failed agent invocations for later inspection and replay.
-
-**casehub-langchain4j-resilience** adds agent-aware resilience:
-`PoisonPillDetector` identifies inputs that will always fail.
-`WatchdogRecoveryBridge` detects hung agents (not just slow responses —
-reasoning loops). `DeadLetterQueue` captures failed invocations for
-inspection. `DispatchBudget` limits concurrent invocations for cost
-control. These compose with generic resilience — they don't replace it.
+CaseHub answers this with eidos (structured agent identity, capability
+matching, reputation) and qhorus (typed channels with delivery semantics,
+normative commitments). These need the CaseHub platform behind them, so
+they are not drop-in modules here: they are part of Phase 4, where your
+LC4j agents run inside CaseHub.
 
 ## The Four Phases
 
@@ -153,71 +130,65 @@ Add a dependency. No code changes. Your existing application gains:
   become multi-tenant. Decorators scope every operation to the current
   tenant. Works with whatever backing implementation you already chose.
 
-- **Governance** — agent invocations gain trust scores and recorded
-  outcomes on top of the causal lineage. Oversight gates and trust-based
-  routing are planned.
+- **Governance** — an oversight gate on tool calls (human approval through
+  casehub-work), plus trust scores and recorded outcomes on top of the
+  causal lineage. Trust-based routing is planned.
 
 - **Hybrid Search** — replace vector-only retrieval with SPLADE sparse +
   dense embeddings + reciprocal rank fusion + cross-encoder reranking.
   26–31% NDCG improvement. Fills an acknowledged gap in LC4j (#4087).
 
-- **Resilience** — failed agent tool calls go to a dead letter queue and
-  retry instead of crashing. Hung agents get detected and cancelled.
-  Concurrent invocations are budget-limited for cost control.
-
 - **Quality Gating** — corrective RAG automatically discards low-relevance
   retrieved chunks before the LLM sees them, reducing hallucination.
 
-### Phase 2 — Your LC4j Agents Are Real Distributed Agents
+- **Retrieval Tracking** — every question is recorded with the documents
+  the model received, for feedback and analytics (zero-hit questions,
+  document impact). Correct also for query-rewriting pipelines — see the
+  [query rewriting recipe](guides/query-rewriting.md).
 
-This is where LC4j agents gain capabilities that don't exist anywhere
-else in the Java ecosystem:
+Two planned Phase 1 modules were dropped: agent resilience (we wait for
+upstream Quarkus work instead) and a concurrency budget (a few lines of
+application code, no module needed).
 
-- **Agent Identity (Eidos)** — your agent goes from a hardcoded system
-  prompt to a dynamically rendered identity with personality (48
-  archetypes from Hartwell & Chen), disposition axes, goal narratives,
-  and epistemic confidence. The same agent code behaves differently
-  depending on context.
+### Phase 2 — Folded Into Phases 1 and 4
 
-- **Agent Reputation (Eidos + Ledger)** — other agents and humans
-  rate your agent's outputs. Bayesian Beta trust scores evolve from
-  verifiable peer review. Your agent's reputation is earned, not
-  declared.
+Phase 2 promised distributed-agent capabilities. Implementation showed a
+different shape: human-in-the-loop approval and oversight shipped inside
+Phase 1 governance; query expansion is already LangChain4j's
+`QueryTransformer` (we document how to track it instead of wrapping it);
+NLI hallucination detection proved unreliable on real LLM output; agent
+identity, typed channels and peer trust need the CaseHub platform behind
+them and moved to Phase 4.
 
-- **Typed Communication (Qhorus)** — your agents get structured messaging
-  channels with five delivery semantics, access controls, rate limiting,
-  and delivery tracking. Not method calls — real inter-agent communication
-  with auditable history.
+### Phase 3 — Capabilities Nothing Else on the JVM Offers
 
-- **Normative Commitments (Qhorus)** — agent messages carry deontic
-  obligations. A promise creates an enforceable commitment. A request
-  creates an expectation. Violations are detected and recorded. This is
-  speech-act theory applied to multi-agent systems.
+Modules for LC4j developers that depend on neocortex and platform modules
+which run standalone — not on the full CaseHub platform. Planned, in this
+order:
 
-- **Human-in-the-Loop (Work)** — your agent creates a WorkItem for human
-  review. 11-status lifecycle, SLA breach policies with escalation chains,
-  M-of-N group completion, delegation. The agent pauses; a human decides;
-  the agent resumes.
+- **NLP Template Rendering and Extraction** — your agent writes prose, you
+  get structured data. Templates render data into the prompt and extract
+  fields from the answer, tolerating natural variation, and re-ask with the
+  expected sentence shape when extraction fails. No JSON mode.
 
-- **Advanced RAG (Neocortex)** — HyDE query expansion, step-back
-  reformulation, NLI hallucination detection via local ONNX inference,
-  structured attestation records for every agent decision.
-
-### Phase 3 — Enterprise-Grade Infrastructure
-
-For deployments that need deeper capability backing:
+- **Agent Simulation** — a `ChatModel` that answers from a versioned
+  prompt→response corpus. Capture real traffic during development, replay
+  it deterministically in CI. No ad-hoc mocks, no real LLM in tests.
 
 - **Case-Based Reasoning Memory** — agents learn from past cases.
   Similarity-weighted retrieval, outcome feedback loops, plan adaptation.
   A different memory paradigm from ChatMemoryStore — not competing, a
   different category.
 
-- **SPLADE Sparse Embeddings** — learned term expansion for domain-specific
-  vocabulary. The only JVM implementation available.
+- **Governed MCP Playbooks** — a guide, not a module: the
+  [distributions](https://github.com/casehubio/distributions) MCP server
+  exposes 130+ connector tools and multi-step playbooks to any agent
+  runtime, and audit, the oversight gate and tenancy already apply to those
+  calls.
 
-- **Corpus Management** — enterprise document lifecycle with versioning,
-  provenance tracking, and incremental re-indexing. Beyond LC4j's basic
-  Tika parsing.
+The path in: discover the MCP server's tools → add casehub-langchain4j for
+enterprise trust on those calls → add RAG quality and the Phase 3 modules
+→ adopt the full platform.
 
 ### Phase 4 — Full Platform Orchestration
 
@@ -240,6 +211,10 @@ alongside their LC4j agents:
 - **Multi-Agent Protocols** — structured conversation, negotiation,
   judgment, and coalition formation. Turn-based, policy-driven, with
   consensus and termination conditions.
+
+- **Agent Identity, Channels and Trust** — eidos identity and reputation,
+  qhorus typed channels and normative commitments, ledger peer trust —
+  as reference architectures for LC4j agents running inside CaseHub.
 
 ## Design Principles
 
@@ -265,20 +240,18 @@ Not all modules are equal in weight. The dependency footprint per module:
 
 | Module | Transitive CaseHub deps | Weight |
 |---|---|---|
-| audit | casehub-ledger-api, casehub-platform-api | Light — two API JARs |
+| audit | casehub-ledger-api, casehub-platform-api (both optional) | Light — two API JARs |
 | tenancy | casehub-platform-api | Minimal — one API JAR |
-| resilience | casehub-engine-common-core | Light — engine utilities only |
-| governance | casehub-langchain4j-audit-core, casehub-ledger-api (optional) | Light — trust needs the ledger |
-| eidos | casehub-eidos-api | Medium — identity model |
-| qhorus | casehub-qhorus-api | Medium — channel infrastructure |
-| work (human-in-the-loop) | casehub-work-api | Medium — WorkItem lifecycle |
+| governance | casehub-langchain4j-audit-core; optional casehub-ledger-api, casehub-work-api, casehub-engine-api | Light — the gate needs casehub-work and engine's risk classifiers |
+| hybrid-search | casehub-neocortex-rag-api | Light API, but needs neocortex's retrieval pipeline at runtime |
+| crag | casehub-neocortex-rag-api | Light — plus a relevance evaluator (cross-encoder) |
+| tracking | casehub-neocortex-rag-api | Light — plus a retrieval tracker (neocortex SQLite or your own) |
 
-Phase 1 modules (audit, tenancy, resilience) are genuinely light — API
-JARs with no runtime infrastructure requirements. Phase 2 modules
-(eidos, qhorus, work) are heavier — they bring real capabilities that
-require real backing services. We are upfront about this because
-"add one dependency" should mean the developer knows what they're
-getting.
+Phase 1 modules are genuinely light — API JARs, with the backing service
+named where one is needed. Phase 3 modules will bring neocortex or
+platform runtime modules with them; each will state what it needs. We are
+upfront about this because "add one dependency" should mean the developer
+knows what they're getting.
 
 Phase 4 (engine orchestration, blocks patterns) is a platform adoption
 decision, not a drop-in enrichment. We don't pretend otherwise. The path
@@ -295,12 +268,11 @@ casehub-langchain4j
   → langchain4j-core         Your existing LC4j code
   → casehub-platform         Identity, tenancy, agent SPIs
   → casehub-ledger           Audit trail, trust scoring
-  → casehub-neocortex        Cognition — RAG, memory, inference
-  → casehub-eidos            Agent identity, personality
-  → casehub-qhorus           Channels, deliberation
-  → casehub-work             Human tasks, SLA, escalation
-  → casehub-engine           Case lifecycle, orchestration
-  → casehub-agency           Annotation patterns, governance
+  → casehub-neocortex        Cognition — RAG, retrieval tracking, memory
+  → casehub-work             Approvals for the oversight gate
+  → casehub-engine           Risk classification; Phase 4 orchestration
+  → casehub-eidos, -qhorus,  Phase 4 — identity, channels,
+    -agency                  orchestration patterns
 ```
 
 No upstream CaseHub repo depends on this repo. The dependency arrow
@@ -322,10 +294,10 @@ to know CaseHub exists.
     <artifactId>casehub-langchain4j-tenancy</artifactId>
 </dependency>
 
-<!-- Phase 2: Agent identity -->
+<!-- Phase 1: Record which documents each answer used -->
 <dependency>
     <groupId>io.casehub.langchain4j</groupId>
-    <artifactId>casehub-langchain4j-eidos</artifactId>
+    <artifactId>casehub-langchain4j-tracking</artifactId>
 </dependency>
 ```
 
